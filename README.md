@@ -18,7 +18,7 @@ A robust, automated cryptocurrency trading bot for Binance Futures, built with P
 
 ## 📈 Trading Strategy
 
-The bot implements a verified profitable strategy (Backtested +51% PnL over 4 years timeframe on BTC/USDT 1d):
+The bot implements a high-frequency trend-following strategy (Backtested on **15m timeframe**):
 
 1.  **Indicators**:
     *   **Heikin Ashi Candles**: Smoothens price action.
@@ -64,31 +64,31 @@ The bot implements a verified profitable strategy (Backtested +51% PnL over 4 ye
 ## 🚀 Usage
 
 ### Run the Live Bot
-This will start the scheduler to check for signals daily (aligned with 1d timeframe).
+This will start the scheduler to check for signals every 1 minute.
 ```bash
 python main.py
 ```
 
 ### Run Backtest
-Analyze historical performance, calculate Win Rate, PnL, and Max Drawdown.
+Analyze historical performance for the 15m timeframe.
 ```bash
 python backtest.py
 ```
 
 ---
 
-## 📊 Backtest Results (BTC/USDT 1d)
+## 📊 Backtest Results (BTC/USDT 15m)
 
-*Dataset: ~1500 days (approx 4 years)*
+*Dataset: ~1500 candles (~16 days)*
 
 | Metric | Value |
 | :--- | :--- |
-| **Net PnL** | **+51.04%** |
-| **Win Rate** | **75.00%** |
-| **Max Drawdown** | 33.06% |
-| **Total Trades** | 17 |
+| **Net PnL** | **+3.43%** (approx 6-7%/month) |
+| **Win Rate** | **30.00%** |
+| **Max Drawdown** | 6.16% |
+| **Total Trades** | 21 |
 
-*Note: Past performance is not indicative of future results.*
+*Note: 15m timeframe trades more frequently with lower win rate but captures quick moves.*
 
 ---
 
@@ -98,7 +98,7 @@ You can fine-tune the strategy parameters in `config.py`:
 
 ```python
 SYMBOL = "BTC/USDT"
-TIMEFRAME = "1d"           # Recommended: 1d
+TIMEFRAME = "15m"          # Aggressive: 15m | Safe: 1d
 SUPERTREND_LENGTH = 15     # Standard: 15
 SUPERTREND_FACTOR = 3.0    # Smoother trend: 3.0
 POSITION_SIZE_PERCENT = 1.0 # 1.0 = 100% (All-in)
