@@ -9,7 +9,8 @@ class Strategy:
 
     def run_analysis(self):
         self.logger.info("Fetching market data...")
-        df = self.client.fetch_ohlcv(limit=100)
+        # Fetch 300 candles to ensure EMA 100 and SuperTrend have enough history to stabilize
+        df = self.client.fetch_ohlcv(limit=300)
         
         if df is None or df.empty:
             self.logger.error("No data received.")
