@@ -1,5 +1,5 @@
 from .data_processor import DataProcessor
-from config import SUPERTREND_LENGTH, SUPERTREND_FACTOR
+from config import SUPERTREND_LENGTH, SUPERTREND_FACTOR, EMA_LENGTH
 
 class Strategy:
     def __init__(self, exchange_client, logger):
@@ -18,7 +18,7 @@ class Strategy:
         self.logger.info("Calculating Heikin Ashi, SuperTrend, and EMA...")
         df_ha = DataProcessor.calculate_heikin_ashi(df)
         df_st = DataProcessor.calculate_supertrend(df_ha)
-        df_final = DataProcessor.calculate_ema(df_st, length=200)
+        df_final = DataProcessor.calculate_ema(df_st, length=EMA_LENGTH)
         
         # Get the last closed candle (second to last row, as last row is unfinished)
         last_candle = df_final.iloc[-2]
@@ -32,27 +32,27 @@ class Strategy:
         previous_trend = prev_candle[st_dir_col]
         
         close_price = last_candle['close']
-        ema200 = last_candle['EMA_200']
+        ema_val = last_candle[f'EMA_{EMA_LENGTH}']
         
-        self.logger.info(f"Analysis Complete. Close: {close_price}, Trend: {current_trend}, EMA 200: {ema200:.2f}")
+        self.logger.info(f"Analysis Complete. Close: {close_price}, Trend: {current_trend}, EMA {EMA_LENGTH}: {ema_val:.2f}")
         
         # Determine Signal based on Trend Flip + EMA Filter
         signal = None
         
         # Filter: Long if Price > EMA, Short if Price < EMA
-        is_uptrend_long = close_price > ema200
-        is_downtrend_short = close_price < ema200
+        is_uptrend_long = close_price > ema_val
+        is_downtrend_short = close_price < ema_val
         
         if current_trend == 1 and previous_trend == -1:
             if is_uptrend_long:
                 signal = 'LONG' # Trend Green + Above EMA
             else:
-                self.logger.info("LONG signal ignored (Price < EMA 200)")
+                self.logger.info(f"LONG signal ignored (Price < EMA {EMA_LENGTH})")
         elif current_trend == -1 and previous_trend == 1:
             if is_downtrend_short:
                 signal = 'SHORT' # Trend Red + Below EMA
             else:
-                self.logger.info("SHORT signal ignored (Price > EMA 200)")
+                self.logger.info(f"SHORT signal ignored (Price > EMA {EMA_LENGTH})")
             
         if signal:
             self.logger.info(f"SIGNAL DETECTED: {signal}")
