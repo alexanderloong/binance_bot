@@ -3,8 +3,8 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-API_KEY = os.getenv("BINANCE_API_KEY")
-SECRET = os.getenv("BINANCE_SECRET")
+API_KEY = os.getenv("API_KEY")
+SECRET = os.getenv("SECRET")
 USE_TESTNET = os.getenv("USE_TESTNET", "True").lower() == "true"
 
 # Strategy Settings
