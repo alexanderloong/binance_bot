@@ -53,3 +53,11 @@ class ExchangeClient:
         except Exception as e:
             print(f"Error creating order: {e}")
             return None
+
+    def get_balance(self):
+        try:
+            balance = self.exchange.fetch_balance()
+            return balance['USDT']['free']
+        except Exception as e:
+            print(f"Error fetching balance: {e}")
+            return 0.0

@@ -72,12 +72,17 @@ class Strategy:
     def open_position(self, side, price):
         from config import POSITION_SIZE_PERCENT
         # Calculate amount based on % balance
-        # balance = self.client.get_balance()
-        # trade_amount = (balance * POSITION_SIZE_PERCENT) / price
-        
-        self.logger.info(f"Opening {side} position at {price} (Size: {POSITION_SIZE_PERCENT*100}% of Balance)")
-        # if side == 'LONG':
-        #     self.client.create_order('buy', trade_amount)
-        # else:
-        #     self.client.create_order('sell', trade_amount)
-        self.in_position = True
+        try:
+            balance = self.client.get_balance()
+            trade_amount = (balance * POSITION_SIZE_PERCENT) / price
+            
+            self.logger.info(f"Opening {side} position at {price} (Size: {POSITION_SIZE_PERCENT*100}% of Balance: {balance} USDT -> {trade_amount:.4f} BTC)")
+            
+            if side == 'LONG':
+                self.client.create_order('buy', trade_amount)
+            else:
+                self.client.create_order('sell', trade_amount)
+            self.in_position = True
+            
+        except Exception as e:
+            self.logger.error(f"Failed to open position: {e}")
