@@ -62,9 +62,32 @@ The bot implements a trend-following strategy (Optimized for **15m timeframe**):
 
 ---
 
+## 🚀 Deployment (Stable & Auto-Restart)
+
+Để bot chạy ổn định 24/7 và tự động khởi động lại nếu gặp lỗi hoặc máy tính reboot, bạn nên dùng Docker:
+
+### Chạy bằng Docker (Recommended)
+Đây là cách chuyên nghiệp nhất, môi trường độc lập và cực kỳ ổn định.
+
+1.  Cài đặt [Docker Desktop](https://www.docker.com/products/docker-desktop/) cho Windows.
+2.  Mở terminal tại thư mục dự án và chạy:
+    ```bash
+    docker-compose up -d --build
+    ```
+3.  Để xem log (nhật ký chạy):
+    ```bash
+    docker-compose logs -f
+    ```
+4.  Để dừng bot:
+    ```bash
+    docker-compose down
+    ```
+
+---
+
 ## 🚀 Usage
 
-### Run the Live Bot
+### Run Manually (Testing)
 This will start the scheduler to check for signals every 1 minute.
 ```bash
 python main.py
