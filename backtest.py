@@ -27,7 +27,7 @@ def run_backtest():
         client = ExchangeClient()
         # Fetch max available limit (Binance usually 1000-1500 per call)
         # We request 1500 to get maximum single-call data
-        df = client.fetch_history(limit=1500)
+        df = client.fetch_history(limit=1000)
         
         if df is not None and not df.empty:
             print(f"Saving {len(df)} candles to cache...")
