@@ -3,10 +3,11 @@ version: '3.8'
 services:
   binance-bot:
     build: .
+    image: alexanderloong/binance-bot:v1.0.0
     container_name: binance_bot
-    restart: always  # Auto-restart on crash or system reboot
+    restart: always # Auto-restart on crash or system reboot
     volumes:
-      - .:/app       # Mount current dir to save logs back to host
+      - .:/app # Mount current dir to save logs back to host
     env_file:
       - .env
     # network_mode: "host" # Uncomment if improved network performance is needed
