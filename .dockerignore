@@ -1,9 +1,8 @@
-
+.env
 .git
 .venv
 venv
 __pycache__
 *.pyc
-.env.example
 bot.log
 backtest_data.csv
