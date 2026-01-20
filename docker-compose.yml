@@ -10,4 +10,6 @@ services:
       - .:/app # Mount current dir to save logs back to host
     env_file:
       - .env
+    environment:
+      - TZ=Asia/Ho_Chi_Minh
     # network_mode: "host" # Uncomment if improved network performance is needed

@@ -1,15 +1,19 @@
 import ccxt
 import pandas as pd
+import logging
 from config import API_KEY, SECRET, USE_TESTNET, SYMBOL, TIMEFRAME, LEVERAGE
 
 class ExchangeClient:
     def __init__(self):
+        self.logger = logging.getLogger("BinanceBot")
         self.exchange = ccxt.binance({
             'apiKey': API_KEY,
             'secret': SECRET,
             'enableRateLimit': True,
             'options': {
-                'defaultType': 'future',  # Assuming futures trading for SuperTrend usually
+                'defaultType': 'future',
+                'adjustForTimeDifference': True,
+                'recvWindow': 10000,
             }
         })
         if USE_TESTNET:
@@ -17,11 +21,19 @@ class ExchangeClient:
         
         # Verify connection and set leverage
         try:
+            # Manually sync time using an anonymous client
+            # Subtracting an extra 1000ms as a safety buffer against "ahead of server" errors
+            server_time = ccxt.binance().fetch_time()
+            self.exchange.options['timeDifference'] = (server_time - self.exchange.milliseconds()) - 1000
+            
             self.exchange.load_markets()
             self.exchange.set_leverage(LEVERAGE, SYMBOL)
-            print(f"Successfully connected to Binance. Leverage set to {LEVERAGE}x for {SYMBOL}")
+            
+            balance = self.get_balance()
+            self.logger.info(f"Successfully connected to Binance. Leverage set to {LEVERAGE}x for {SYMBOL}")
+            self.logger.info(f"Current Wallet Balance: {balance} USDT")
         except Exception as e:
-            print(f"Error connecting to Binance: {e}")
+            self.logger.error(f"Error connecting to Binance: {e}")
 
     def fetch_ohlcv(self, limit=100):
         try:
@@ -30,21 +42,17 @@ class ExchangeClient:
             df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms').dt.tz_localize('UTC').dt.tz_convert('Asia/Ho_Chi_Minh')
             return df
         except Exception as e:
-            print(f"Error fetching data: {e}")
+            self.logger.error(f"Error fetching data: {e}")
             return None
 
     def fetch_history(self, limit=1000):
-        # Fetch larger history with basic pagination if needed, 
-        # but for 1000, binance usually allows it in one go or we loop
-        # For simplicity in this demo, we'll request the max allowed per call recursively or just one big call if supported
         try:
-            # Binance limit is often 1000
             bars = self.exchange.fetch_ohlcv(SYMBOL, timeframe=TIMEFRAME, limit=limit)
             df = pd.DataFrame(bars, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
             df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms').dt.tz_localize('UTC').dt.tz_convert('Asia/Ho_Chi_Minh')
             return df
         except Exception as e:
-            print(f"Error fetching history: {e}")
+            self.logger.error(f"Error fetching history: {e}")
             return None
 
     def create_order(self, side, amount):
@@ -52,7 +60,7 @@ class ExchangeClient:
             order = self.exchange.create_market_order(SYMBOL, side, amount)
             return order
         except Exception as e:
-            print(f"Error creating order: {e}")
+            self.logger.error(f"Error creating order: {e}")
             return None
 
     def get_balance(self):
@@ -60,5 +68,5 @@ class ExchangeClient:
             balance = self.exchange.fetch_balance()
             return balance['USDT']['free']
         except Exception as e:
-            print(f"Error fetching balance: {e}")
+            self.logger.error(f"Error fetching balance: {e}")
             return 0.0
