@@ -19,7 +19,7 @@ def run_backtest():
         if file_date == date.today():
             print("Loading data from local cache...")
             df = pd.read_csv(cache_file)
-            df['timestamp'] = pd.to_datetime(df['timestamp'])
+            df['timestamp'] = pd.to_datetime(df['timestamp']).dt.tz_convert('Asia/Ho_Chi_Minh')
         else:
             print("Cache expired. Fetching new data...")
     
@@ -76,6 +76,8 @@ def run_backtest():
         
         price = current_candle['close']
         timestamp = current_candle['timestamp']
+        # Format for display
+        display_time = timestamp.strftime('%d-%m-%Y %H:%M:%S')
         
         # Determine Signal
         signal = None
@@ -97,11 +99,11 @@ def run_backtest():
                 pnl = 0
                 if position_amt > 0: # Closing Long
                     pnl = (price - entry_price) * position_amt
-                    print(f"[{timestamp}] CLOSE LONG | Price: {price:.2f} | Entry: {entry_price:.2f} | PnL: {pnl:.2f}")
+                    print(f"[{display_time}] CLOSE LONG | Price: {price:.2f} | Entry: {entry_price:.2f} | PnL: {pnl:.2f}")
                     trades.append({'type': 'CLOSE_LONG', 'time': timestamp, 'price': price, 'pnl': pnl})
                 else: # Closing Short
                     pnl = (entry_price - price) * abs(position_amt)
-                    print(f"[{timestamp}] CLOSE SHORT| Price: {price:.2f} | Entry: {entry_price:.2f} | PnL: {pnl:.2f}")
+                    print(f"[{display_time}] CLOSE SHORT| Price: {price:.2f} | Entry: {entry_price:.2f} | PnL: {pnl:.2f}")
                     trades.append({'type': 'CLOSE_SHORT', 'time': timestamp, 'price': price, 'pnl': pnl})
                 
                 balance += pnl
@@ -116,12 +118,12 @@ def run_backtest():
                 if signal == 'LONG':
                     position_amt = amount
                     entry_price = price
-                    print(f"[{timestamp}] OPEN LONG  | Price: {price:.2f} | Amt: {amount:.4f}")
+                    print(f"[{display_time}] OPEN LONG  | Price: {price:.2f} | Amt: {amount:.4f}")
                     trades.append({'type': 'OPEN_LONG', 'time': timestamp, 'price': price, 'amount': amount})
                 elif signal == 'SHORT':
                     position_amt = -amount
                     entry_price = price
-                    print(f"[{timestamp}] OPEN SHORT | Price: {price:.2f} | Amt: {amount:.4f}")
+                    print(f"[{display_time}] OPEN SHORT | Price: {price:.2f} | Amt: {amount:.4f}")
                     trades.append({'type': 'OPEN_SHORT', 'time': timestamp, 'price': price, 'amount': amount})
 
     # Final Value

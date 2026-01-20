@@ -34,8 +34,9 @@ class Strategy:
         
         close_price = last_candle['close']
         ema_val = last_candle[f'EMA_{EMA_LENGTH}']
+        candle_time = last_candle['timestamp'].strftime('%d-%m-%Y %H:%M:%S')
         
-        self.logger.info(f"Analysis Complete. Close: {close_price}, Trend: {current_trend}, EMA {EMA_LENGTH}: {ema_val:.2f}")
+        self.logger.info(f"Analysis Complete for candle {candle_time}. Close: {close_price}, Trend: {current_trend}, EMA {EMA_LENGTH}: {ema_val:.2f}")
         
         # Determine Signal based on Trend Flip + EMA Filter
         signal = None
