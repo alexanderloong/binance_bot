@@ -41,28 +41,28 @@ class Strategy:
         # Determine Signal based on Trend Flip + EMA Filter
         signal = None
         
-        # Filter: Long if Price > EMA, Short if Price < EMA
+        # Determine EMA filter
         is_uptrend_long = close_price > ema_val
         is_downtrend_short = close_price < ema_val
         
-        if current_trend == 1 and previous_trend == -1:
-            if is_uptrend_long:
-                signal = 'LONG' # Trend Green + Above EMA
-            else:
-                self.logger.info(f"LONG signal ignored (Price < EMA {EMA_LENGTH})")
-        elif current_trend == -1 and previous_trend == 1:
-            if is_downtrend_short:
-                signal = 'SHORT' # Trend Red + Below EMA
-            else:
-                self.logger.info(f"SHORT signal ignored (Price > EMA {EMA_LENGTH})")
+        # 1. LOGIC ĐÓNG LỆNH: Đóng ngay khi Trend đổi màu (bảo vệ lợi nhuận)
+        # (LƯU Ý: Trong thực tế bạn nên check API xem có lệnh đang mở thật không)
+        if (self.in_position and current_trend == -1 and previous_trend != -1): # Trend đổi sang Đỏ
+             self.logger.info(f"Trend flipped to RED. Closing positions if any.")
+             self.close_all_positions()
+        elif (self.in_position and current_trend == 1 and previous_trend != 1): # Trend đổi sang Xanh
+             self.logger.info(f"Trend flipped to GREEN. Closing positions if any.")
+             self.close_all_positions()
+
+        # 2. LOGIC MỞ LỆNH: Cần Trend Flip + EMA Filter
+        signal = None
+        if current_trend == 1 and previous_trend == -1 and is_uptrend_long:
+            signal = 'LONG'
+        elif current_trend == -1 and previous_trend == 1 and is_downtrend_short:
+            signal = 'SHORT'
             
-        if signal:
+        if signal and not self.in_position:
             self.logger.info(f"SIGNAL DETECTED: {signal}")
-            
-            # 1. Close Opposite Positions
-            self.close_all_positions()
-            
-            # 2. Open New Position
             self.open_position(signal, close_price)
 
     def close_all_positions(self):

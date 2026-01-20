@@ -82,49 +82,49 @@ def run_backtest():
         # Determine Signal
         signal = None
         
-        # Trend Filter: Price relative to EMA
+        # Determine EMA filter
         is_uptrend_long = price > ema_val
-        is_downtrend_long = price < ema_val
+        is_downtrend_short = price < ema_val
         
-        if curr_trend == 1 and prev_trend == -1:
-            if is_uptrend_long:
-                signal = 'LONG'
-        elif curr_trend == -1 and prev_trend == 1:
-            if is_downtrend_long:
-                signal = 'SHORT'
+        # 1. LOGIC ĐÓNG LỆNH: Đóng ngay khi Trend đổi màu (để bảo vệ vốn/lợi nhuận)
+        if position_amt > 0 and curr_trend == -1: # Đang Long mà Trend thành Đỏ
+            pnl = (price - entry_price) * position_amt
+            print(f"[{display_time}] CLOSE LONG (Trend Flip) | Price: {price:.2f} | PnL: {pnl:.2f}")
+            trades.append({'type': 'CLOSE_LONG', 'time': timestamp, 'price': price, 'pnl': pnl})
+            balance += pnl
+            position_amt = 0
+            entry_price = 0
             
-        if signal:
-            # 1. Close Existing Position if any
-            if position_amt != 0:
-                pnl = 0
-                if position_amt > 0: # Closing Long
-                    pnl = (price - entry_price) * position_amt
-                    print(f"[{display_time}] CLOSE LONG | Price: {price:.2f} | Entry: {entry_price:.2f} | PnL: {pnl:.2f}")
-                    trades.append({'type': 'CLOSE_LONG', 'time': timestamp, 'price': price, 'pnl': pnl})
-                else: # Closing Short
-                    pnl = (entry_price - price) * abs(position_amt)
-                    print(f"[{display_time}] CLOSE SHORT| Price: {price:.2f} | Entry: {entry_price:.2f} | PnL: {pnl:.2f}")
-                    trades.append({'type': 'CLOSE_SHORT', 'time': timestamp, 'price': price, 'pnl': pnl})
-                
-                balance += pnl
-                position_amt = 0
-                
-            # 2. Open New Position
-            if True:
-                # Calculate Trade Value with Leverage
-                trade_value = balance * POSITION_SIZE_PERCENT * LEVERAGE
-                amount = trade_value / price
-                
-                if signal == 'LONG':
-                    position_amt = amount
-                    entry_price = price
-                    print(f"[{display_time}] OPEN LONG  | Price: {price:.2f} | Amt: {amount:.4f}")
-                    trades.append({'type': 'OPEN_LONG', 'time': timestamp, 'price': price, 'amount': amount})
-                elif signal == 'SHORT':
-                    position_amt = -amount
-                    entry_price = price
-                    print(f"[{display_time}] OPEN SHORT | Price: {price:.2f} | Amt: {amount:.4f}")
-                    trades.append({'type': 'OPEN_SHORT', 'time': timestamp, 'price': price, 'amount': amount})
+        elif position_amt < 0 and curr_trend == 1: # Đang Short mà Trend thành Xanh
+            pnl = (entry_price - price) * abs(position_amt)
+            print(f"[{display_time}] CLOSE SHORT (Trend Flip)| Price: {price:.2f} | PnL: {pnl:.2f}")
+            trades.append({'type': 'CLOSE_SHORT', 'time': timestamp, 'price': price, 'pnl': pnl})
+            balance += pnl
+            position_amt = 0
+            entry_price = 0
+
+        # 2. LOGIC MỞ LỆNH: Cần Trend Flip + EMA Filter
+        signal = None
+        if curr_trend == 1 and prev_trend == -1 and is_uptrend_long:
+            signal = 'LONG'
+        elif curr_trend == -1 and prev_trend == 1 and is_downtrend_short:
+            signal = 'SHORT'
+            
+        if signal and position_amt == 0:
+            # Calculate Trade Value with Leverage
+            trade_value = balance * POSITION_SIZE_PERCENT * LEVERAGE
+            amount = trade_value / price
+            
+            if signal == 'LONG':
+                position_amt = amount
+                entry_price = price
+                print(f"[{display_time}] OPEN LONG  | Price: {price:.2f} | Amt: {amount:.4f}")
+                trades.append({'type': 'OPEN_LONG', 'time': timestamp, 'price': price, 'amount': amount})
+            elif signal == 'SHORT':
+                position_amt = -amount
+                entry_price = price
+                print(f"[{display_time}] OPEN SHORT | Price: {price:.2f} | Amt: {amount:.4f}")
+                trades.append({'type': 'OPEN_SHORT', 'time': timestamp, 'price': price, 'amount': amount})
 
     # Final Value
     if position_amt != 0:
