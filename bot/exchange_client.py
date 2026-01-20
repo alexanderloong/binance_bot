@@ -13,7 +13,7 @@ class ExchangeClient:
             'options': {
                 'defaultType': 'future',
                 'adjustForTimeDifference': True,
-                'recvWindow': 10000,
+                'recvWindow': 60000,
             }
         })
         if USE_TESTNET:
@@ -21,11 +21,6 @@ class ExchangeClient:
         
         # Verify connection and set leverage
         try:
-            # Manually sync time using an anonymous client
-            # Subtracting an extra 1000ms as a safety buffer against "ahead of server" errors
-            server_time = ccxt.binance().fetch_time()
-            self.exchange.options['timeDifference'] = (server_time - self.exchange.milliseconds()) - 1000
-            
             self.exchange.load_markets()
             self.exchange.set_leverage(LEVERAGE, SYMBOL)
             
