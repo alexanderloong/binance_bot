@@ -62,7 +62,7 @@ def run_backtest():
     st_dir_col = f"SUPERTd_{SUPERTREND_LENGTH}_{SUPERTREND_FACTOR}"
     ema_col = f'EMA_{EMA_LENGTH}'
     
-    from config import POSITION_SIZE_PERCENT
+    from config import POSITION_SIZE_PERCENT, LEVERAGE
     
     print("\n--- Trade Log ---")
 
@@ -109,8 +109,8 @@ def run_backtest():
                 
             # 2. Open New Position
             if True:
-                # Calculate Trade Value
-                trade_value = balance * POSITION_SIZE_PERCENT
+                # Calculate Trade Value with Leverage
+                trade_value = balance * POSITION_SIZE_PERCENT * LEVERAGE
                 amount = trade_value / price
                 
                 if signal == 'LONG':

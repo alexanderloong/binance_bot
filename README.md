@@ -58,27 +58,27 @@ The bot implements a trend-following strategy (Optimized for **15m timeframe**):
         SECRET=your_secret_key
         USE_TESTNET=True
         ```
-        *(Lưu ý: Nếu file `.env` của bạn dùng `API_KEY` và `SECRET`, bot sẽ tự động nhận diện đúng theo `config.py` mới nhất)*
+        *(Note: The bot automatically detects `API_KEY` and `SECRET` from `.env` as per the latest `config.py`)*
 
 ---
 
 ## 🚀 Deployment (Stable & Auto-Restart)
 
-Để bot chạy ổn định 24/7 và tự động khởi động lại nếu gặp lỗi hoặc máy tính reboot, bạn nên dùng Docker:
+To ensure the bot runs stably 24/7 and automatically restarts if it encounters errors or the system reboots, you should use Docker:
 
-### Chạy bằng Docker (Recommended)
-Đây là cách chuyên nghiệp nhất, môi trường độc lập và cực kỳ ổn định.
+### Running with Docker (Recommended)
+This is the most professional method, providing an isolated and extremely stable environment.
 
-1.  Cài đặt [Docker Desktop](https://www.docker.com/products/docker-desktop/) cho Windows.
-2.  Mở terminal tại thư mục dự án và chạy:
+1.  Install [Docker Desktop](https://www.docker.com/products/docker-desktop/) for Windows.
+2.  Open a terminal in the project directory and run:
     ```bash
     docker-compose up -d --build
     ```
-3.  Để xem log (nhật ký chạy):
+3.  To view logs:
     ```bash
     docker-compose logs -f
     ```
-4.  Để dừng bot:
+4.  To stop the bot:
     ```bash
     docker-compose down
     ```
@@ -101,13 +101,13 @@ python backtest.py
 
 ---
 
-## 📊 Xem Hiệu Suất (Monitoring Performance)
+## 📊 Monitoring Performance
 
-Bạn có thể theo dõi hiệu suất của bot qua các kênh sau:
+You can monitor the bot's performance through the following channels:
 
-1.  **Bot Logs**: Xem tệp `bot.log` để theo dõi nhật ký giao dịch, kiểm tra số dư và trạng thái lệnh theo thời gian thực.
-2.  **Binance Testnet Dashboard**: Truy cập [testnet.binancefuture.com](https://testnet.binancefuture.com/) để xem trực quan các vị thế đang mở và biến động tài sản.
-3.  **Backtest Report**: Chạy `python backtest.py` để nhận báo cáo tổng kết về PnL, Win Rate và Max Drawdown dựa trên dữ liệu lịch sử (1000 nến gần nhất).
+1.  **Bot Logs**: Check the `bot.log` file to track transaction logs, balance checks, and order status in real-time.
+2.  **Binance Testnet Dashboard**: Access [testnet.binancefuture.com](https://testnet.binancefuture.com/) to visually see open positions and asset fluctuations.
+3.  **Backtest Report**: Run `python backtest.py` to get a summary report on PnL, Win Rate, and Max Drawdown based on historical data (last 1000 candles).
 
 ---
 
@@ -121,6 +121,7 @@ TIMEFRAME = "15m"          # Period for candles (e.g., 15m, 1h, 1d)
 SUPERTREND_LENGTH = 15     # Standard: 15
 SUPERTREND_FACTOR = 1.5    # Aggressiveness of SuperTrend
 EMA_LENGTH = 100           # Trend filter period
+LEVERAGE = 9               # Leverage multiplier (x9)
 POSITION_SIZE_PERCENT = 1  # 1.0 = 100% of balance used per trade
 ```
 

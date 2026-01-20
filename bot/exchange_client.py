@@ -1,6 +1,6 @@
 import ccxt
 import pandas as pd
-from config import API_KEY, SECRET, USE_TESTNET, SYMBOL, TIMEFRAME
+from config import API_KEY, SECRET, USE_TESTNET, SYMBOL, TIMEFRAME, LEVERAGE
 
 class ExchangeClient:
     def __init__(self):
@@ -15,10 +15,11 @@ class ExchangeClient:
         if USE_TESTNET:
             self.exchange.set_sandbox_mode(True)
         
-        # Verify connection
+        # Verify connection and set leverage
         try:
             self.exchange.load_markets()
-            print("Successfully connected to Binance")
+            self.exchange.set_leverage(LEVERAGE, SYMBOL)
+            print(f"Successfully connected to Binance. Leverage set to {LEVERAGE}x for {SYMBOL}")
         except Exception as e:
             print(f"Error connecting to Binance: {e}")
 
