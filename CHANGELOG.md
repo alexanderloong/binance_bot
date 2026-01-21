@@ -2,7 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
-## [1.1.0] - 2026-01-21
+## [1.1.1] - 2026-01-21
+### Fixed
+- **Critical Order Size Fix:** Resolved "amount must be greater than minimum amount precision" error by correctly multiplying the trade quantity by the configured leverage.
+- **Backtest Accuracy:** Fixed Max Drawdown calculation and added detailed trade logging with 0.05% transaction fees included.
+
+### Changed
+- **Strategy Tuning:** Updated default configuration to Leverage x20, Position Size 0.9 (90%), EMA 99, and SuperTrend 15/1.5 based on backtest optimization.
+
 ### Added
 - Integrated official **Binance Connector** (`binance-connector` & `binance-futures-connector`).
 - Implemented `UMFutures` (USD-M Futures) class in `ExchangeClient` to replace `ccxt` logic.
