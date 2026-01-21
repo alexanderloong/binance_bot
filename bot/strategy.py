@@ -1,5 +1,7 @@
 from .data_processor import DataProcessor
-from config import SUPERTREND_LENGTH, SUPERTREND_FACTOR, EMA_LENGTH
+from config import SUPERTREND_LENGTH, SUPERTREND_FACTOR, EMA_LENGTH, TIMEFRAME
+from datetime import datetime, timedelta
+import pytz
 
 class Strategy:
     def __init__(self, exchange_client, logger):
@@ -8,6 +10,17 @@ class Strategy:
         self.in_position = False 
         self.last_candle_time = None
         self.trade_history = [] # For rate limiting
+        
+        # Parse timeframe for stale candle checking
+        self.tf_seconds = 900 # Default 15m
+        try:
+            val = int(''.join(c for c in TIMEFRAME if c.isdigit()))
+            unit = ''.join(c for c in TIMEFRAME if c.isalpha()).lower()
+            if unit == 'm': self.tf_seconds = val * 60
+            elif unit == 'h': self.tf_seconds = val * 3600
+            elif unit == 'd': self.tf_seconds = val * 86400
+        except:
+            pass
 
     def check_rate_limit(self):
         from config import MAX_TRADES_PER_HOUR
@@ -34,7 +47,7 @@ class Strategy:
         try:
             # Get timestamp of the last CLOSED candle (second to last row)
             last_closed_candle = df.iloc[-2]
-            last_closed_time = last_closed_candle['timestamp']
+            last_closed_time = last_closed_candle['timestamp'] # This is pd.Timestamp (tz aware)
             
             if self.last_candle_time == last_closed_time:
                 # Candle already processed. Skip.
@@ -42,7 +55,28 @@ class Strategy:
             
             # New candle detected
             self.last_candle_time = last_closed_time
-            self.logger.info(f"Processing new 15m candle: {last_closed_time}")
+            
+            # --- STALENESS CHECK ---
+            # If the candle closed too long ago, we should skip processing to avoid late entries
+            # Example: Candle 01:15 closes at 01:30. If Now is 01:44, it is STALE.
+            
+            # Calculate when this candle should have closed
+            candle_close_time = last_closed_time + timedelta(seconds=self.tf_seconds)
+            
+            # Get current time in same timezone (Asia/Ho_Chi_Minh or whatever df uses)
+            now = datetime.now(last_closed_time.tzinfo)
+            
+            # Calculate delay
+            delay_seconds = (now - candle_close_time).total_seconds()
+            
+            # Tolerance: If we are more than 2 minutes (120s) late after close, it's stale
+            STALE_TOLERANCE = 120 
+            
+            if delay_seconds > STALE_TOLERANCE:
+                self.logger.warning(f"Candle {last_closed_time} is STALE (Closed {int(delay_seconds)}s ago). Skipping trade logic.")
+                return False
+                
+            self.logger.info(f"Processing new candle: {last_closed_time} (Latency: {delay_seconds:.1f}s)")
             
         except Exception as e:
             self.logger.error(f"Error checking candle timestamp: {e}")

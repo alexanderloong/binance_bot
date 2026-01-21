@@ -3,7 +3,8 @@ from bot.exchange_client import ExchangeClient
 from bot.data_processor import DataProcessor
 from config import SYMBOL, TIMEFRAME, SUPERTREND_LENGTH, SUPERTREND_FACTOR, EMA_LENGTH, POSITION_SIZE_PERCENT, LEVERAGE
 import os
-from datetime import datetime, date
+import time
+from datetime import datetime, date, timedelta
 
 def simulate(df, use_ema_filter=True):
     initial_balance = 1000
@@ -118,26 +119,48 @@ def run_backtest():
     print(f"--- Backtest for {SYMBOL} ({TIMEFRAME}) ---")
     print(f"Strategy: EMA {EMA_LENGTH}, SuperTrend {SUPERTREND_LENGTH}/{SUPERTREND_FACTOR}")
     
-    cache_file = "backtest_data.csv"
+    symbol_clean = SYMBOL.replace("/", "_").replace("\\", "_")
+    cache_file = f"backtest_data_{symbol_clean}_{TIMEFRAME}.csv"
     df = None
     
+    # Calculate timeframe in seconds for cache expiry
+    tf_seconds = 900 # Default 15m
+    try:
+        val = int(''.join(c for c in TIMEFRAME if c.isdigit()))
+        unit = ''.join(c for c in TIMEFRAME if c.isalpha()).lower()
+        if unit == 'm': tf_seconds = val * 60
+        elif unit == 'h': tf_seconds = val * 3600
+        elif unit == 'd': tf_seconds = val * 86400
+        else: tf_seconds = val * 60
+    except:
+        pass
+
+    should_fetch = True
     if os.path.exists(cache_file):
-        print("Loading data from local cache...")
-        try:
-            df = pd.read_csv(cache_file)
-            df['timestamp'] = pd.to_datetime(df['timestamp'])
-            # handling tz if needed, usually just kept as is for backtest display
-        except:
-            pass
+        file_mtime = os.path.getmtime(cache_file)
+        file_age = time.time() - file_mtime
+        if file_age < tf_seconds:
+            remaining = tf_seconds - file_age
+            print(f"Loading data from local cache... (Age: {int(file_age)}s, Next refresh in: {int(remaining)}s)")
+            try:
+                df = pd.read_csv(cache_file)
+                df['timestamp'] = pd.to_datetime(df['timestamp'])
+                should_fetch = False
+            except:
+                pass
+        else:
+            print(f"Cache is stale (Age: {int(file_age)}s >= {tf_seconds}s interval). Fetching new data...")
     
-    if df is None or df.empty:
+    if should_fetch:
+        print(f"Fetching fresh historical data from exchange...")
         client = ExchangeClient()
         df = client.fetch_history(limit=1000)
-        if df is not None:
+        if df is not None and not df.empty:
             df.to_csv(cache_file, index=False)
+            print(f"Data saved to {cache_file}")
     
     if df is None or df.empty:
-        print("No data.")
+        print("No data available.")
         return
 
     print(f"Processing {len(df)} candles...")
@@ -149,11 +172,7 @@ def run_backtest():
     # Or just print after simulation
     res, trades = simulate(df_final, use_ema_filter=True)
     
-    print("\n" + "="*80)
-    print(f"{'Time':<25} | {'Type':<15} | {'Price':<12} | {'Amount':<15} | {'PnL (USDT)':<12}")
-    print("-" * 80)
-    
-    previous_pnl_acc = 0
+    print("\n--- Trade History ---")
     for t in trades:
         time_str = t['time']
         if isinstance(time_str, pd.Timestamp):
@@ -163,17 +182,16 @@ def run_backtest():
         price = t['price']
         pnl = t.get('pnl', 0)
         amount = t.get('amount', 0)
-        amount_str = f"{amount:.4f}" if amount > 0 else "-"
         
-        # Determine nice formatting
-        if 'OPEN' in type_str:
-             print(f"{time_str:<25} | {type_str:<15} | {price:<12.4f} | {amount_str:<15} | {pnl:>12.4f} (Fee)")
-        elif 'CLOSE' in type_str:
-             print(f"{time_str:<25} | {type_str:<15} | {price:<12.4f} | {amount_str:<15} | {pnl:>12.4f}")
-        else:
-             print(f"{time_str:<25} | {type_str:<15} | {price:<12.4f} | {amount_str:<15} | {pnl:>12.4f}")
-
-    print("="*80)
+        log_msg = f"[{time_str}] {type_str:<12} at {price:>10.2f}"
+        if amount > 0:
+            log_msg += f", Amt: {amount:>8.4f}"
+        
+        if pnl != 0:
+            pnl_label = "Fee" if 'OPEN' in type_str else "PnL"
+            log_msg += f", {pnl_label}: {pnl:>8.2f} USDT"
+            
+        print(log_msg)
     print(f"\nFinal Balance: {res['final_balance']:.2f} USDT")
     print(f"Total PnL: {res['pnl_pct']:.2f}%")
     print(f"Win Rate: {res['win_rate']:.1f}% ({res['total_trades']} trades)")
