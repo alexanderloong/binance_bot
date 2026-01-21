@@ -21,7 +21,7 @@ def main():
     # For simplicity, we'll run every 1 minute to check (in a real scenario, you sync with clock).
     # The strategy has simple state tracking to avoid double trading on same signal.
     
-    schedule.every(1).minutes.do(strategy.run_analysis)
+    schedule.every(30).seconds.do(strategy.run_analysis)
     
     logger.info("Bot is running. Press Ctrl+C to stop.")
     

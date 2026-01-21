@@ -9,7 +9,7 @@ USE_TESTNET = os.getenv("USE_TESTNET", "True").lower() == "true"
 
 # Strategy Settings
 SYMBOL = "BTC/USDT"
-TIMEFRAME = "15m"
+TIMEFRAME = "1m"
 SUPERTREND_LENGTH = 15
 SUPERTREND_FACTOR = 1.5
 EMA_LENGTH = 100

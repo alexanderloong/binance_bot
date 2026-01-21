@@ -1,4 +1,4 @@
-import ccxt
+from binance.um_futures import UMFutures
 import pandas as pd
 import logging
 from config import API_KEY, SECRET, USE_TESTNET, SYMBOL, TIMEFRAME, LEVERAGE
@@ -6,53 +6,71 @@ from config import API_KEY, SECRET, USE_TESTNET, SYMBOL, TIMEFRAME, LEVERAGE
 class ExchangeClient:
     def __init__(self):
         self.logger = logging.getLogger("BinanceBot")
-        self.exchange = ccxt.binance({
-            'apiKey': API_KEY,
-            'secret': SECRET,
-            'enableRateLimit': True,
-            'options': {
-                'defaultType': 'future',
-                'adjustForTimeDifference': True,
-                'recvWindow': 60000,
-            }
-        })
-        if USE_TESTNET:
-            self.exchange.set_sandbox_mode(True)
         
-        # Verify connection and set leverage
-        try:
-            self.exchange.load_markets()
-            self.exchange.set_leverage(LEVERAGE, SYMBOL)
+        # Determine base URL
+        base_url = "https://fapi.binance.com"
+        if USE_TESTNET:
+            base_url = "https://testnet.binancefuture.com"
             
+        self.client = UMFutures(key=API_KEY, secret=SECRET, base_url=base_url)
+        
+        # Prepare symbol
+        self.symbol = SYMBOL.replace("/", "").upper()
+        
+        # Verify connection
+        try:
+            # 1. Test connectivity (Ping)
+            self.client.ping()
+            self.logger.info("Connection to Binance API established.")
+            
+            # 2. Try to set leverage (Often fails with -1000 on Testnet, which we can ignore if it's already set)
+            try:
+                self.client.change_leverage(symbol=self.symbol, leverage=LEVERAGE)
+                self.logger.info(f"Leverage set to {LEVERAGE}x for {self.symbol}")
+            except Exception as lev_e:
+                # If error is -1000 (Unknown) or leverage is already set, we just log and continue
+                self.logger.warning(f"Note: Could not set leverage (might be already set): {lev_e}")
+            
+            # 3. Check Balance
             balance = self.get_balance()
-            self.logger.info(f"Successfully connected to Binance. Leverage set to {LEVERAGE}x for {SYMBOL}")
-            self.logger.info(f"Current Wallet Balance: {balance} USDT")
+            self.logger.info(f"Successfully authenticated. Current Wallet Balance: {balance} USDT")
+            
         except Exception as e:
-            self.logger.error(f"Error connecting to Binance: {e}")
+            self.logger.error(f"Critical connection error: {e}")
 
     def fetch_ohlcv(self, limit=100):
         try:
-            bars = self.exchange.fetch_ohlcv(SYMBOL, timeframe=TIMEFRAME, limit=limit)
-            df = pd.DataFrame(bars, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
+            bars = self.client.klines(self.symbol, interval=TIMEFRAME, limit=limit)
+            
+            df = pd.DataFrame(bars, columns=[
+                'timestamp', 'open', 'high', 'low', 'close', 'volume', 
+                'close_time', 'quote_asset_volume', 'number_of_trades', 
+                'taker_buy_base_asset_volume', 'taker_buy_quote_asset_volume', 'ignore'
+            ])
+            
+            # Convert to numeric
+            for col in ['open', 'high', 'low', 'close', 'volume']:
+                df[col] = pd.to_numeric(df[col])
+                
             df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms').dt.tz_localize('UTC').dt.tz_convert('Asia/Ho_Chi_Minh')
-            return df
+            return df[['timestamp', 'open', 'high', 'low', 'close', 'volume']]
         except Exception as e:
-            self.logger.error(f"Error fetching data: {e}")
+            self.logger.error(f"Error fetching data for {SYMBOL}: {e}")
             return None
 
     def fetch_history(self, limit=1000):
-        try:
-            bars = self.exchange.fetch_ohlcv(SYMBOL, timeframe=TIMEFRAME, limit=limit)
-            df = pd.DataFrame(bars, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
-            df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms').dt.tz_localize('UTC').dt.tz_convert('Asia/Ho_Chi_Minh')
-            return df
-        except Exception as e:
-            self.logger.error(f"Error fetching history: {e}")
-            return None
+        return self.fetch_ohlcv(limit=limit)
 
     def create_order(self, side, amount):
         try:
-            order = self.exchange.create_market_order(SYMBOL, side, amount)
+            side = side.upper()
+            
+            order = self.client.new_order(
+                symbol=self.symbol,
+                side=side,
+                type='MARKET',
+                quantity=round(amount, 3)
+            )
             return order
         except Exception as e:
             self.logger.error(f"Error creating order: {e}")
@@ -60,8 +78,12 @@ class ExchangeClient:
 
     def get_balance(self):
         try:
-            balance = self.exchange.fetch_balance()
-            return balance['USDT']['free']
+            account_info = self.client.account()
+            # Find USDT balance
+            for asset in account_info['assets']:
+                if asset['asset'] == 'USDT':
+                    return float(asset['walletBalance']) # Or availableBalance
+            return 0.0
         except Exception as e:
             self.logger.error(f"Error fetching balance: {e}")
             return 0.0
