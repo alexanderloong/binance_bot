@@ -49,12 +49,19 @@ class Strategy:
             last_closed_candle = df.iloc[-2]
             last_closed_time = last_closed_candle['timestamp'] # This is pd.Timestamp (tz aware)
             
-            if self.last_candle_time == last_closed_time:
+            # Convert to Value (seconds) or String for reliable comparison across calls
+            # Use timestamp value in milliseconds or ISO string
+            last_closed_ts_val = last_closed_time.value 
+            
+            if self.last_candle_time == last_closed_ts_val:
                 # Candle already processed. Skip.
+                # self.logger.debug(f"Candle {last_closed_time} already processed. Skipping.")
                 return False
             
-            # New candle detected
-            self.last_candle_time = last_closed_time
+            # New candle detected - save its value
+            self.last_candle_time = last_closed_ts_val
+            
+            # --- STALENESS CHECK ---
             
             # --- STALENESS CHECK ---
             # If the candle closed too long ago, we should skip processing to avoid late entries

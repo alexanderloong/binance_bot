@@ -32,10 +32,20 @@ def main():
             next_candle_close = ((int(now) // tf_seconds) + 1) * tf_seconds
             seconds_remaining = next_candle_close - now
             
-            # 2. Smart Sleep: If we are far from the close (more than 10s buffer), sleep to save resources
-            buffer_seconds = 10
-            if seconds_remaining > buffer_seconds:
-                sleep_duration = seconds_remaining - buffer_seconds
+            # 2. Smart Sleep: 
+            # We ONLY sleep if we are in the "boring" middle part of the candle.
+            # - Must be > 10s before the NEXT close (Pre-Close Buffer)
+            # - Must be < (TF - 60s) remaining (Post-Open Buffer), meaning we are past the first 60s of the new candle
+            # This ensures we keep scanning for ~60s after the new candle opens to catch the data update
+            
+            pre_close_buffer = 10
+            post_open_buffer = 60
+            
+            should_sleep = (seconds_remaining > pre_close_buffer) and \
+                           (seconds_remaining < (tf_seconds - post_open_buffer))
+
+            if should_sleep:
+                sleep_duration = seconds_remaining - pre_close_buffer
                 logger.info(f"Waiting {int(sleep_duration)}s until next candle close area...")
                 
                 # Sleep in small chunks to keep Ctrl+C responsive
