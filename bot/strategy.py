@@ -43,46 +43,40 @@ class Strategy:
             self.logger.error("No data received.")
             return False
 
-        # --- FIX: Prevent Multi-Entry on same candle ---
+        # --- FIX: Prevent Multi-Entry and Flickering ---
         try:
             # Get timestamp of the last CLOSED candle (second to last row)
             last_closed_candle = df.iloc[-2]
-            last_closed_time = last_closed_candle['timestamp'] # This is pd.Timestamp (tz aware)
+            last_closed_time = last_closed_candle['timestamp'] 
+            last_closed_ts_val = int(last_closed_time.timestamp()) 
             
-            # Convert to Value (seconds) or String for reliable comparison across calls
-            # Use timestamp value in milliseconds or ISO string
-            last_closed_ts_val = last_closed_time.value 
-            
-            if self.last_candle_time == last_closed_ts_val:
-                # Candle already processed. Skip.
-                # self.logger.debug(f"Candle {last_closed_time} already processed. Skipping.")
+            # 1. If we already processed this EXACT candle, skip
+            if self.last_candle_time is not None and self.last_candle_time == last_closed_ts_val:
                 return False
-            
-            # New candle detected - save its value
-            self.last_candle_time = last_closed_ts_val
-            
-            # --- STALENESS CHECK ---
-            
+                
+            # 2. If we see a candle that is OLDER than our last processed one (API Flicker), skip
+            if self.last_candle_time is not None and last_closed_ts_val < self.last_candle_time:
+                # self.logger.debug(f"API Flicker detected: {last_closed_time} is older than last processed.")
+                return False
+
             # --- STALENESS CHECK ---
             # If the candle closed too long ago, we should skip processing to avoid late entries
-            # Example: Candle 01:15 closes at 01:30. If Now is 01:44, it is STALE.
-            
-            # Calculate when this candle should have closed
             candle_close_time = last_closed_time + timedelta(seconds=self.tf_seconds)
-            
-            # Get current time in same timezone (Asia/Ho_Chi_Minh or whatever df uses)
             now = datetime.now(last_closed_time.tzinfo)
-            
-            # Calculate delay
             delay_seconds = (now - candle_close_time).total_seconds()
             
-            # Tolerance: If we are more than 2 minutes (120s) late after close, it's stale
             STALE_TOLERANCE = 120 
             
             if delay_seconds > STALE_TOLERANCE:
+                # Mark as seen to prevent repeated stale logs, but only if it's newer than what we have
+                if self.last_candle_time is None or last_closed_ts_val > self.last_candle_time:
+                    self.last_candle_time = last_closed_ts_val
+                
                 self.logger.warning(f"Candle {last_closed_time} is STALE (Closed {int(delay_seconds)}s ago). Skipping trade logic.")
                 return False
-                
+            
+            # 3. SUCCESS: It's a fresh, new candle.
+            self.last_candle_time = last_closed_ts_val
             self.logger.info(f"Processing new candle: {last_closed_time} (Latency: {delay_seconds:.1f}s)")
             
         except Exception as e:

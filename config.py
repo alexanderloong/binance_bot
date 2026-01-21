@@ -13,6 +13,6 @@ TIMEFRAME = "15m"             # Changed to 15m to reduce noise and fees
 SUPERTREND_LENGTH = 15
 SUPERTREND_FACTOR = 1.5       # Higher factor = more stable trend
 EMA_LENGTH = 99              # Stronger trend filter
-LEVERAGE = 20
+LEVERAGE = 12
 POSITION_SIZE_PERCENT = 0.9   # Trading with 90% of balance per position
 MAX_TRADES_PER_HOUR = 5       # Safety: Limit max trades per hour to prevent spamming
