@@ -71,13 +71,16 @@ class Strategy:
             self.in_position = False
 
     def open_position(self, side, price):
-        from config import POSITION_SIZE_PERCENT
+        from config import POSITION_SIZE_PERCENT, LEVERAGE
         # Calculate amount based on % balance
         try:
             balance = self.client.get_balance()
-            trade_amount = (balance * POSITION_SIZE_PERCENT) / price
+            # Calculate trade amount using leverage
+            # Amount in USDT (Buying Power) = Balance * Position_Size % * Leverage
+            amount_usdt = balance * POSITION_SIZE_PERCENT * LEVERAGE
+            trade_amount = amount_usdt / price
             
-            self.logger.info(f"Opening {side} position at {price} (Size: {POSITION_SIZE_PERCENT*100}% of Balance: {balance} USDT -> {trade_amount:.4f} BTC)")
+            self.logger.info(f"Opening {side} position at {price} (Size: {POSITION_SIZE_PERCENT*100}% of Balance: {balance} USDT, Leverage: {LEVERAGE}x -> {trade_amount:.4f} BTC)")
             
             if side == 'LONG':
                 self.client.create_order('buy', trade_amount)
