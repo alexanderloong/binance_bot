@@ -66,10 +66,9 @@ class Strategy:
             self.open_position(signal, close_price)
 
     def close_all_positions(self):
-        # Placeholder for closing all open positions logic
         self.logger.info("Closing all existing positions...")
-        # self.client.close_all_orders() or similar
-        self.in_position = False
+        if self.client.close_all_positions():
+            self.in_position = False
 
     def open_position(self, side, price):
         from config import POSITION_SIZE_PERCENT

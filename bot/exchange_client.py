@@ -79,11 +79,31 @@ class ExchangeClient:
     def get_balance(self):
         try:
             account_info = self.client.account()
-            # Find USDT balance
             for asset in account_info['assets']:
                 if asset['asset'] == 'USDT':
-                    return float(asset['walletBalance']) # Or availableBalance
+                    return float(asset['walletBalance'])
             return 0.0
         except Exception as e:
             self.logger.error(f"Error fetching balance: {e}")
             return 0.0
+
+    def close_all_positions(self):
+        """Closes all positions for the current symbol by placing an offsetting market order."""
+        try:
+            positions = self.client.account()['positions']
+            for pos in positions:
+                if pos['symbol'] == self.symbol:
+                    amt = float(pos['positionAmt'])
+                    if amt != 0:
+                        side = 'SELL' if amt > 0 else 'BUY'
+                        self.client.new_order(
+                            symbol=self.symbol,
+                            side=side,
+                            type='MARKET',
+                            quantity=abs(amt)
+                        )
+                        self.logger.info(f"Closed position for {self.symbol}. Amount: {amt}")
+            return True
+        except Exception as e:
+            self.logger.error(f"Error closing positions: {e}")
+            return False
