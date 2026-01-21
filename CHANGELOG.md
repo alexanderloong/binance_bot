@@ -2,7 +2,18 @@
 
 All notable changes to this project will be documented in this file.
 
-## [1.1.1] - 2026-01-21
+## [1.1.2] - 2026-01-22
+### CRITICAL FIXES (SAFETY UPDATE)
+- **Prevented "Spam" Trading:** Fixed a major issue where the bot would repeatedly open/close positions on the same candle. Added `last_candle_time` tracking to ensure each 15m candle is processed exactly once.
+- **Real-time State Verification:** Discarded unreliable internal state (`in_position`). Bot now fetches active positions directly from Binance API before making decisions, preventing double-entry and ensuring correct Trend Flip execution.
+- **Smart Polling:** Replaced `schedule` with a high-frequency polling loop (10s) combined with the new deduplication logic to ensure fastest reaction time without spam.
+
+### Added
+- **Circuit Breaker:** Implemented `MAX_TRADES_PER_HOUR` (default: 5) in `config.py` to hard-stop the bot if abnormal trading activity is detected.
+
+### Fixed
+- **Docker Config:** Added explicit validation and error logging for missing `API_KEY` / `SECRET` in `config.py`, helping debug Docker environment issues.
+
 ### Fixed
 - **Critical Order Size Fix:** Resolved "amount must be greater than minimum amount precision" error by correctly multiplying the trade quantity by the configured leverage.
 - **Backtest Accuracy:** Fixed Max Drawdown calculation and added detailed trade logging with 0.05% transaction fees included.

@@ -13,28 +13,22 @@ def main():
     client = ExchangeClient()
     strategy = Strategy(client, logger)
     
-    # Run once immediately
-    strategy.run_analysis()
-    
-    # Schedule to run every day (matches candle size)
-    # Note: Ideally you want to run slightly after the candle close (UTC 00:00).
-    # For simplicity, we'll run every 1 minute to check (in a real scenario, you sync with clock).
-    # The strategy has simple state tracking to avoid double trading on same signal.
-    
-    schedule.every(30).seconds.do(strategy.run_analysis)
-    
     logger.info("Bot is running. Press Ctrl+C to stop.")
     
     while True:
         try:
-            schedule.run_pending()
-            time.sleep(1)
+            # Strategy now handles deduplication (only runs once per candle)
+            strategy.run_analysis()
+            
+            # Poll every 10 seconds to catch the candle close quickly
+            time.sleep(10) 
+            
         except KeyboardInterrupt:
             logger.info("Bot stopped by user.")
             break
         except Exception as e:
             logger.error(f"Unexpected error: {e}")
-            time.sleep(60)
+            time.sleep(10)
 
 if __name__ == "__main__":
     main()

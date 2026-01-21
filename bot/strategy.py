@@ -5,16 +5,49 @@ class Strategy:
     def __init__(self, exchange_client, logger):
         self.client = exchange_client
         self.logger = logger
-        self.in_position = False # Simple state tracking, ideally check balance or active orders
+        self.in_position = False 
+        self.last_candle_time = None
+        self.trade_history = [] # For rate limiting
+
+    def check_rate_limit(self):
+        from config import MAX_TRADES_PER_HOUR
+        import time
+        current_time = time.time()
+        # Keep only trades within last hour (3600 seconds)
+        self.trade_history = [t for t in self.trade_history if current_time - t < 3600]
+        
+        if len(self.trade_history) >= MAX_TRADES_PER_HOUR:
+            self.logger.warning(f"RATE LIMIT REACHED: {len(self.trade_history)} trades in last hour. Max is {MAX_TRADES_PER_HOUR}. Skipping trade.")
+            return False
+        return True
 
     def run_analysis(self):
-        self.logger.info("Fetching market data...")
+        # self.logger.info("Fetching market data...")
         # Fetch 300 candles to ensure EMA 100 and SuperTrend have enough history to stabilize
         df = self.client.fetch_ohlcv(limit=300)
         
         if df is None or df.empty:
             self.logger.error("No data received.")
-            return
+            return False
+
+        # --- FIX: Prevent Multi-Entry on same candle ---
+        try:
+            # Get timestamp of the last CLOSED candle (second to last row)
+            last_closed_candle = df.iloc[-2]
+            last_closed_time = last_closed_candle['timestamp']
+            
+            if self.last_candle_time == last_closed_time:
+                # Candle already processed. Skip.
+                return False
+            
+            # New candle detected
+            self.last_candle_time = last_closed_time
+            self.logger.info(f"Processing new 15m candle: {last_closed_time}")
+            
+        except Exception as e:
+            self.logger.error(f"Error checking candle timestamp: {e}")
+            return False
+        # -----------------------------------------------
 
         self.logger.info("Calculating Heikin Ashi, SuperTrend, and EMA...")
         df_ha = DataProcessor.calculate_heikin_ashi(df)
@@ -45,24 +78,29 @@ class Strategy:
         is_uptrend_long = close_price > ema_val
         is_downtrend_short = close_price < ema_val
         
-        # 1. LOGIC ĐÓNG LỆNH: Đóng ngay khi Trend đổi màu (bảo vệ lợi nhuận)
-        # (LƯU Ý: Trong thực tế bạn nên check API xem có lệnh đang mở thật không)
-        if (self.in_position and current_trend == -1 and previous_trend != -1): # Trend đổi sang Đỏ
-             self.logger.info(f"Trend flipped to RED. Closing positions if any.")
+        # 0. Get Real Position from Exchange
+        current_pos_amt = self.client.get_current_position()
+        
+        # 1. LOGIC ĐÓNG LỆNH (Exit Priority)
+        if current_pos_amt > 0 and current_trend == -1: # Existing Long & Trend turns Red
+             self.logger.info(f"Trend flipped to RED. Closing LONG position ({current_pos_amt}).")
              self.close_all_positions()
-        elif (self.in_position and current_trend == 1 and previous_trend != 1): # Trend đổi sang Xanh
-             self.logger.info(f"Trend flipped to GREEN. Closing positions if any.")
+             current_pos_amt = 0 
+        elif current_pos_amt < 0 and current_trend == 1: # Existing Short & Trend turns Green
+             self.logger.info(f"Trend flipped to GREEN. Closing SHORT position ({current_pos_amt}).")
              self.close_all_positions()
+             current_pos_amt = 0
 
-        # 2. LOGIC MỞ LỆNH: Cần Trend Flip + EMA Filter
+        # 2. LOGIC MỞ LỆNH (Entry Filtered)
         signal = None
         if current_trend == 1 and previous_trend == -1 and is_uptrend_long:
             signal = 'LONG'
         elif current_trend == -1 and previous_trend == 1 and is_downtrend_short:
             signal = 'SHORT'
             
-        if signal and not self.in_position:
-            self.logger.info(f"SIGNAL DETECTED: {signal}")
+        # Only open if we have NO position (Empty State)
+        if signal and current_pos_amt == 0:
+            self.logger.info(f"SIGNAL DETECTED: {signal} (Position is Empty)")
             self.open_position(signal, close_price)
 
     def close_all_positions(self):
@@ -72,6 +110,12 @@ class Strategy:
 
     def open_position(self, side, price):
         from config import POSITION_SIZE_PERCENT, LEVERAGE
+        import time
+        
+        # Safety Check: Rate Limit
+        if not self.check_rate_limit():
+            return
+
         # Calculate amount based on % balance
         try:
             balance = self.client.get_balance()
@@ -87,6 +131,7 @@ class Strategy:
             else:
                 self.client.create_order('sell', trade_amount)
             self.in_position = True
+            self.trade_history.append(time.time())
             
         except Exception as e:
             self.logger.error(f"Failed to open position: {e}")

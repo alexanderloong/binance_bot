@@ -3,7 +3,7 @@ version: '3.8'
 services:
   binance-bot:
     build: .
-    image: alexanderloong/binance-bot:v1.1.1
+    image: alexanderloong/binance-bot:v1.1.2
     container_name: binance_bot
     restart: always # Auto-restart on crash or system reboot
     volumes:

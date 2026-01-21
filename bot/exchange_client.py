@@ -87,6 +87,17 @@ class ExchangeClient:
             self.logger.error(f"Error fetching balance: {e}")
             return 0.0
 
+    def get_current_position(self):
+        try:
+            positions = self.client.account()['positions']
+            for pos in positions:
+                if pos['symbol'] == self.symbol:
+                    return float(pos['positionAmt'])
+            return 0.0
+        except Exception as e:
+            self.logger.error(f"Error fetching position: {e}")
+            return 0.0
+
     def close_all_positions(self):
         """Closes all positions for the current symbol by placing an offsetting market order."""
         try:
