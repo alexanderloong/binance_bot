@@ -5,19 +5,22 @@ from config import SYMBOL, TIMEFRAME, SUPERTREND_LENGTH, SUPERTREND_FACTOR, EMA_
 import os
 from datetime import datetime, date
 
-def simulate(df_final, use_ema_filter=True):
+def simulate(df, use_ema_filter=True):
     initial_balance = 1000
     balance = initial_balance
     position_amt = 0 
     entry_price = 0
     trades = []
+    # Fee: 0.05% for Taker (Market Orders)
+    commission_rate = 0.0005 
     
     st_dir_col = f"SUPERTd_{SUPERTREND_LENGTH}_{SUPERTREND_FACTOR}"
-    ema_col = f'EMA_{EMA_LENGTH}'
+    # Use the custom EMA column if provided (for comparison), otherwise default to config EMA
+    ema_col = 'EMA_FILTER' if 'EMA_FILTER' in df.columns else f'EMA_{EMA_LENGTH}'
 
-    for i in range(1, len(df_final)):
-        current_candle = df_final.iloc[i]
-        prev_candle = df_final.iloc[i-1]
+    for i in range(1, len(df)):
+        current_candle = df.iloc[i]
+        prev_candle = df.iloc[i-1]
         
         curr_trend = current_candle[st_dir_col]
         prev_trend = prev_candle[st_dir_col]
@@ -27,52 +30,67 @@ def simulate(df_final, use_ema_filter=True):
         timestamp = current_candle['timestamp']
         
         # 1. EXIT LOGIC
+        pnl = 0
+        fee = 0
         if position_amt > 0 and curr_trend == -1:
-            pnl = (price - entry_price) * position_amt
-            trades.append({'type': 'CLOSE_LONG', 'time': timestamp, 'price': price, 'pnl': pnl})
+            raw_pnl = (price - entry_price) * position_amt
+            fee = (price * abs(position_amt)) * commission_rate
+            pnl = raw_pnl - fee
             balance += pnl
+            trades.append({'time': timestamp, 'type': 'CLOSE_LONG', 'price': price, 'pnl': pnl})
             position_amt = 0
             
         elif position_amt < 0 and curr_trend == 1:
-            pnl = (entry_price - price) * abs(position_amt)
-            trades.append({'type': 'CLOSE_SHORT', 'time': timestamp, 'price': price, 'pnl': pnl})
+            raw_pnl = (entry_price - price) * abs(position_amt)
+            fee = (price * abs(position_amt)) * commission_rate
+            pnl = raw_pnl - fee
             balance += pnl
+            trades.append({'time': timestamp, 'type': 'CLOSE_SHORT', 'price': price, 'pnl': pnl})
             position_amt = 0
 
         # 2. ENTRY LOGIC
-        is_uptrend_long = price > ema_val if use_ema_filter else True
-        is_downtrend_short = price < ema_val if use_ema_filter else True
+        is_uptrend = price > ema_val if use_ema_filter else True
+        is_downtrend = price < ema_val if use_ema_filter else True
         
         signal = None
-        if curr_trend == 1 and prev_trend == -1 and is_uptrend_long:
+        if curr_trend == 1 and prev_trend == -1 and is_uptrend:
             signal = 'LONG'
-        elif curr_trend == -1 and prev_trend == 1 and is_downtrend_short:
+        elif curr_trend == -1 and prev_trend == 1 and is_downtrend:
             signal = 'SHORT'
             
         if signal and position_amt == 0:
             trade_value = balance * POSITION_SIZE_PERCENT * LEVERAGE
-            amount = trade_value / price
             
-            if signal == 'LONG':
-                position_amt = amount
-                entry_price = price
-                trades.append({'type': 'OPEN_LONG', 'time': timestamp, 'price': price})
-            elif signal == 'SHORT':
-                position_amt = -amount
-                entry_price = price
-                trades.append({'type': 'OPEN_SHORT', 'time': timestamp, 'price': price})
+            # Entry Fee
+            entry_fee = trade_value * commission_rate
+            balance -= entry_fee
+            
+            amount = trade_value / price
+            position_amt = amount if signal == 'LONG' else -amount
+            entry_price = price
+            
+            # Record entry just for tracking, PnL is usually realized on close (or you can account for fee here)
+            # To match balance tracking: we already deducted entry_fee from balance.
+            # We can record a small negative PnL for the entry fee to track drawdown accurately
+            trades.append({'time': timestamp, 'type': f'OPEN_{signal}', 'price': price, 'pnl': -entry_fee, 'amount': amount})
 
     # Close final position
     if position_amt != 0:
-        last_price = df_final.iloc[-1]['close']
-        pnl = (last_price - entry_price) * position_amt if position_amt > 0 else (entry_price - last_price) * abs(position_amt)
+        last_price = df.iloc[-1]['close']
+        raw_pnl = (last_price - entry_price) * position_amt if position_amt > 0 else (entry_price - last_price) * abs(position_amt)
+        fee = (last_price * abs(position_amt)) * commission_rate
+        pnl = raw_pnl - fee
         balance += pnl
-        trades.append({'type': 'FINAL_CLOSE', 'time': df_final.iloc[-1]['timestamp'], 'price': last_price, 'pnl': pnl})
+        trades.append({'time': df.iloc[-1]['timestamp'], 'type': 'FINAL_CLOSE', 'price': last_price, 'pnl': pnl})
 
     # Stats calculation
-    total_trades = sum(1 for t in trades if 'CLOSE' in t['type'])
-    wins = sum(1 for t in trades if 'CLOSE' in t['type'] and t['pnl'] > 0)
-    win_rate = (wins / total_trades * 100) if total_trades > 0 else 0
+    # Count only closed trades for win rate
+    closed_trades = [t for t in trades if 'CLOSE' in t['type']]
+    total_trades_count = len(closed_trades)
+    
+    # Win = PnL > 0 (Fee is already included in PnL)
+    wins = sum(1 for t in closed_trades if t['pnl'] > 0)
+    win_rate = (wins / total_trades_count * 100) if total_trades_count > 0 else 0
     pnl_total = balance - initial_balance
     pnl_pct = (pnl_total / initial_balance) * 100
     
@@ -80,6 +98,7 @@ def simulate(df_final, use_ema_filter=True):
     curr_equity = initial_balance
     peak = initial_balance
     mdd = 0
+    # Replay all PnL events (entries have fees, exits have pnl - fees)
     for t in trades:
         if 'pnl' in t:
             curr_equity += t['pnl']
@@ -90,21 +109,26 @@ def simulate(df_final, use_ema_filter=True):
     return {
         'final_balance': balance,
         'pnl_pct': pnl_pct,
-        'total_trades': total_trades,
+        'total_trades': total_trades_count,
         'win_rate': win_rate,
         'max_drawdown': mdd * 100
-    }
+    }, trades
 
-def run_comparison():
-    print(f"--- Multi-Strategy Comparison for {SYMBOL} ({TIMEFRAME}) ---")
+def run_backtest():
+    print(f"--- Backtest for {SYMBOL} ({TIMEFRAME}) ---")
+    print(f"Strategy: EMA {EMA_LENGTH}, SuperTrend {SUPERTREND_LENGTH}/{SUPERTREND_FACTOR}")
     
     cache_file = "backtest_data.csv"
     df = None
     
     if os.path.exists(cache_file):
         print("Loading data from local cache...")
-        df = pd.read_csv(cache_file)
-        df['timestamp'] = pd.to_datetime(df['timestamp']).dt.tz_convert('Asia/Ho_Chi_Minh')
+        try:
+            df = pd.read_csv(cache_file)
+            df['timestamp'] = pd.to_datetime(df['timestamp'])
+            # handling tz if needed, usually just kept as is for backtest display
+        except:
+            pass
     
     if df is None or df.empty:
         client = ExchangeClient()
@@ -119,120 +143,41 @@ def run_comparison():
     print(f"Processing {len(df)} candles...")
     df_ha = DataProcessor.calculate_heikin_ashi(df)
     df_st = DataProcessor.calculate_supertrend(df_ha)
+    df_final = DataProcessor.calculate_ema(df_st, length=EMA_LENGTH)
     
-    # Calculate different EMAs
-    df_final = df_st.copy()
-    for length in [20, 50, 100]:
-        df_final = DataProcessor.calculate_ema(df_final, length=length)
-
-    strategies = [
-        ("No EMA", False, 0),
-        ("EMA 20", True, 20),
-        ("EMA 50", True, 50),
-        ("EMA 100", True, 100)
-    ]
+    # Run simulation with verbose output (we will modify simulate to return trades and we print them)
+    # Or just print after simulation
+    res, trades = simulate(df_final, use_ema_filter=True)
     
-    results = []
-    for name, use_ema, length in strategies:
-        # Override global EMA_LENGTH for simulation
-        if use_ema:
-            # We need to hack the simulate slightly to use the correct column
-            # For simplicity, let's just create a temporary column named 'EMA_TEMP'
-            df_sim = df_final.copy()
-            df_sim['EMA_FILTER'] = df_sim[f'EMA_{length}']
-            # We modify simulate to accept a custom EMA column name or just use a fixed one
+    print("\n" + "="*80)
+    print(f"{'Time':<25} | {'Type':<15} | {'Price':<12} | {'Amount':<15} | {'PnL (USDT)':<12}")
+    print("-" * 80)
+    
+    previous_pnl_acc = 0
+    for t in trades:
+        time_str = t['time']
+        if isinstance(time_str, pd.Timestamp):
+             time_str = time_str.strftime('%Y-%m-%d %H:%M')
+        
+        type_str = t['type']
+        price = t['price']
+        pnl = t.get('pnl', 0)
+        amount = t.get('amount', 0)
+        amount_str = f"{amount:.4f}" if amount > 0 else "-"
+        
+        # Determine nice formatting
+        if 'OPEN' in type_str:
+             print(f"{time_str:<25} | {type_str:<15} | {price:<12.4f} | {amount_str:<15} | {pnl:>12.4f} (Fee)")
+        elif 'CLOSE' in type_str:
+             print(f"{time_str:<25} | {type_str:<15} | {price:<12.4f} | {amount_str:<15} | {pnl:>12.4f}")
         else:
-            df_sim = df_final.copy()
-            df_sim['EMA_FILTER'] = df_sim['close'] # Dummy
-            
-        res = simulate_custom(df_sim, use_ema_filter=use_ema)
-        res['name'] = name
-        results.append(res)
+             print(f"{time_str:<25} | {type_str:<15} | {price:<12.4f} | {amount_str:<15} | {pnl:>12.4f}")
 
-    print("\n" + "="*70)
-    print(f"{'Strategy':<15} | {'Balance':<12} | {'PnL %':<10} | {'Trades':<8} | {'Win%':<8} | {'MaxDD':<8}")
-    print("-" * 70)
-    for r in results:
-        print(f"{r['name']:<15} | {r['final_balance']:>10.1f} | {r['pnl_pct']:>8.2f}% | {r['total_trades']:>8} | {r['win_rate']:>7.1f}% | {r['max_drawdown']:>7.1f}%")
-    print("="*70)
-
-def simulate_custom(df, use_ema_filter=True):
-    initial_balance = 1000
-    balance = initial_balance
-    position_amt = 0 
-    entry_price = 0
-    trades = []
-    commission_rate = 0.0005 # 0.05% (Standard Binance Fees for Taker/Market Order)
-    
-    st_dir_col = f"SUPERTd_{SUPERTREND_LENGTH}_{SUPERTREND_FACTOR}"
-
-    for i in range(1, len(df)):
-        current_candle = df.iloc[i]
-        prev_candle = df.iloc[i-1]
-        
-        curr_trend = current_candle[st_dir_col]
-        prev_trend = prev_candle[st_dir_col]
-        ema_val = current_candle['EMA_FILTER']
-        
-        price = current_candle['close']
-        
-        # EXIT LOGIC
-        if position_amt > 0 and curr_trend == -1:
-            pnl = (price - entry_price) * position_amt
-            fee = (price * abs(position_amt)) * commission_rate
-            balance += (pnl - fee)
-            trades.append({'pnl': pnl - fee})
-            position_amt = 0
-            
-        elif position_amt < 0 and curr_trend == 1:
-            pnl = (entry_price - price) * abs(position_amt)
-            fee = (price * abs(position_amt)) * commission_rate
-            balance += (pnl - fee)
-            trades.append({'pnl': pnl - fee})
-            position_amt = 0
-
-        # ENTRY LOGIC
-        is_uptrend = price > ema_val if use_ema_filter else True
-        is_downtrend = price < ema_val if use_ema_filter else True
-        
-        signal = None
-        if curr_trend == 1 and prev_trend == -1 and is_uptrend:
-            signal = 'LONG'
-        elif curr_trend == -1 and prev_trend == 1 and is_downtrend:
-            signal = 'SHORT'
-            
-        if signal and position_amt == 0:
-            trade_value = balance * POSITION_SIZE_PERCENT * LEVERAGE
-            amount = trade_value / price
-            position_amt = amount if signal == 'LONG' else -amount
-            entry_price = price
-            # Pay entry fee
-            balance -= (trade_value * commission_rate)
-
-    # CRITICAL FIX: Close final position at last price
-    if position_amt != 0:
-        last_price = df.iloc[-1]['close']
-        if position_amt > 0:
-            pnl = (last_price - entry_price) * position_amt
-        else:
-            pnl = (entry_price - last_price) * abs(position_amt)
-        fee = (last_price * abs(position_amt)) * commission_rate
-        balance += (pnl - fee)
-        trades.append({'pnl': pnl - fee})
-
-    total_trades = len(trades)
-    wins = sum(1 for t in trades if t['pnl'] > 0)
-    win_rate = (wins / total_trades * 100) if total_trades > 0 else 0
-    pnl_total = balance - initial_balance
-    pnl_pct = (pnl_total / initial_balance) * 100
-    
-    return {
-        'final_balance': balance,
-        'pnl_pct': pnl_pct,
-        'total_trades': total_trades,
-        'win_rate': win_rate,
-        'max_drawdown': 0 
-    }
+    print("="*80)
+    print(f"\nFinal Balance: {res['final_balance']:.2f} USDT")
+    print(f"Total PnL: {res['pnl_pct']:.2f}%")
+    print(f"Win Rate: {res['win_rate']:.1f}% ({res['total_trades']} trades)")
+    print(f"Max Drawdown: {res['max_drawdown']:.2f}%")
 
 if __name__ == "__main__":
-    run_comparison()
+    run_backtest()
