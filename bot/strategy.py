@@ -159,6 +159,10 @@ class Strategy:
         # Calculate amount based on % balance
         try:
             balance = self.client.get_balance()
+            if balance is None:
+                self.logger.error("Could not fetch balance. Aborting position opening.")
+                return
+
             # Calculate trade amount using leverage
             # Amount in USDT (Buying Power) = Balance * Position_Size % * Leverage
             amount_usdt = balance * POSITION_SIZE_PERCENT * LEVERAGE

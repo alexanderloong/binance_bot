@@ -12,23 +12,6 @@ def main():
     
     client = ExchangeClient()
     
-    # --- TIME SYNC FIX ---
-    # If the drift is significant (> 500ms), we monkey-patch time.time() 
-    # to compensate. This is a common fix for Docker-on-Windows drift.
-    if hasattr(client, 'time_offset') and abs(client.time_offset) > 500:
-        import builtins
-        import time as time_mod
-        
-        offset_seconds = client.time_offset / 1000.0
-        original_time = time_mod.time
-        
-        def synced_time():
-            return original_time() + offset_seconds
-            
-        time_mod.time = synced_time
-        logger.info(f"Global time.time() has been adjusted by {offset_seconds:.3f}s for synchronization.")
-    # ---------------------
-    
     strategy = Strategy(client, logger)
     
     tf_seconds = 60 # Default
