@@ -17,18 +17,21 @@ class ExchangeClient:
         # Prepare symbol
         self.symbol = SYMBOL.replace("/", "").upper()
         
+        # Time synchronization offset
+        self.time_offset = 0
+        self.sync_time()
+        
         # Verify connection
         try:
             # 1. Test connectivity (Ping)
             self.client.ping()
             self.logger.info("Connection to Binance API established.")
             
-            # 2. Try to set leverage (Often fails with -1000 on Testnet, which we can ignore if it's already set)
+            # 2. Try to set leverage
             try:
-                self.client.change_leverage(symbol=self.symbol, leverage=LEVERAGE)
+                self.client.change_leverage(symbol=self.symbol, leverage=LEVERAGE, recvWindow=10000)
                 self.logger.info(f"Leverage set to {LEVERAGE}x for {self.symbol}")
             except Exception as lev_e:
-                # If error is -1000 (Unknown) or leverage is already set, we just log and continue
                 self.logger.warning(f"Note: Could not set leverage (might be already set): {lev_e}")
             
             # 3. Check Balance
@@ -37,6 +40,22 @@ class ExchangeClient:
             
         except Exception as e:
             self.logger.error(f"Critical connection error: {e}")
+
+    def sync_time(self):
+        """Calculates the offset between local time and Binance server time."""
+        try:
+            res = self.client.time()
+            server_time = res['serverTime']
+            local_time = int(time.time() * 1000)
+            self.time_offset = server_time - local_time
+            self.logger.info(f"Time synced with Binance server. Offset: {self.time_offset}ms")
+            
+            # If we are ahead of the server, we should compensate
+            if abs(self.time_offset) > 500:
+                self.logger.warning(f"Significant time drift detected ({self.time_offset}ms). Applying correction.")
+        except Exception as e:
+            self.logger.error(f"Failed to sync time with Binance: {e}")
+            self.time_offset = 0
 
     def fetch_ohlcv(self, limit=100):
         try:
@@ -69,7 +88,8 @@ class ExchangeClient:
                 symbol=self.symbol,
                 side=side,
                 type='MARKET',
-                quantity=round(amount, 3)
+                quantity=round(amount, 3),
+                recvWindow=10000
             )
             if order:
                 self.logger.info(f"Market Order Successful: {side} {amount} {self.symbol} - ID: {order.get('orderId')}")
@@ -90,7 +110,8 @@ class ExchangeClient:
                 stopPrice=round(stop_price, 2),
                 quantity=round(amount, 3),
                 workingType='MARK_PRICE',
-                reduceOnly=True # Crucial: SL should only reduce position, not open a new one
+                reduceOnly=True, # Crucial: SL should only reduce position, not open a new one
+                recvWindow=10000
             )
             if order:
                 self.logger.info(f"Stop Market Order (SL) Set at {stop_price} (Mark Price) - ID: {order.get('orderId')}")
@@ -102,7 +123,7 @@ class ExchangeClient:
     def cancel_all_orders(self):
         """Cancels all open orders (like old Stop Losses) for the symbol."""
         try:
-            self.client.cancel_open_orders(symbol=self.symbol)
+            self.client.cancel_open_orders(symbol=self.symbol, recvWindow=10000)
             self.logger.info(f"Canceled all open orders for {self.symbol}")
             return True
         except Exception as e:
@@ -111,7 +132,7 @@ class ExchangeClient:
 
     def get_balance(self):
         try:
-            account_info = self.client.account()
+            account_info = self.client.account(recvWindow=10000)
             for asset in account_info['assets']:
                 if asset['asset'] == 'USDT':
                     return float(asset['walletBalance'])
@@ -122,7 +143,8 @@ class ExchangeClient:
 
     def get_current_position(self):
         try:
-            positions = self.client.account()['positions']
+            # Using position_risk is faster and more specific than account()
+            positions = self.client.position_risk(symbol=self.symbol, recvWindow=10000)
             for pos in positions:
                 if pos['symbol'] == self.symbol:
                     return float(pos['positionAmt'])
@@ -134,7 +156,8 @@ class ExchangeClient:
     def close_all_positions(self):
         """Closes all positions for the current symbol by placing an offsetting market order."""
         try:
-            positions = self.client.account()['positions']
+            # Get positions using position_risk (more efficient)
+            positions = self.client.position_risk(symbol=self.symbol, recvWindow=10000)
             for pos in positions:
                 if pos['symbol'] == self.symbol:
                     amt = float(pos['positionAmt'])
@@ -148,10 +171,10 @@ class ExchangeClient:
                             symbol=self.symbol,
                             side=side,
                             type='MARKET',
-                            quantity=abs(amt)
+                            quantity=abs(amt),
+                            recvWindow=10000
                         )
                         self.logger.info(f"Closed position for {self.symbol}. Amount: {amt} - Order ID: {order.get('orderId')}")
-            return True
             return True
         except Exception as e:
             self.logger.error(f"Error closing positions: {e}")
