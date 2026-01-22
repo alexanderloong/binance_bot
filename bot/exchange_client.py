@@ -143,8 +143,8 @@ class ExchangeClient:
 
     def get_current_position(self):
         try:
-            # Using position_risk is faster and more specific than account()
-            positions = self.client.position_risk(symbol=self.symbol, recvWindow=10000)
+            # Using get_position_risk is faster and more specific than account()
+            positions = self.client.get_position_risk(symbol=self.symbol, recvWindow=10000)
             for pos in positions:
                 if pos['symbol'] == self.symbol:
                     return float(pos['positionAmt'])
@@ -156,8 +156,8 @@ class ExchangeClient:
     def close_all_positions(self):
         """Closes all positions for the current symbol by placing an offsetting market order."""
         try:
-            # Get positions using position_risk (more efficient)
-            positions = self.client.position_risk(symbol=self.symbol, recvWindow=10000)
+            # Get positions using get_position_risk (more efficient)
+            positions = self.client.get_position_risk(symbol=self.symbol, recvWindow=10000)
             for pos in positions:
                 if pos['symbol'] == self.symbol:
                     amt = float(pos['positionAmt'])
