@@ -143,7 +143,8 @@ class Strategy:
             self.logger.info(f"No entry signal for {candle_time} (Current Trend: {current_trend}, Position: {current_pos_amt})")
 
     def close_all_positions(self):
-        self.logger.info("Closing all existing positions...")
+        self.logger.info("Closing all positions and canceling orders...")
+        # ExchangeClient.close_all_positions already handles canceling
         if self.client.close_all_positions():
             self.in_position = False
 
@@ -165,10 +166,23 @@ class Strategy:
             
             self.logger.info(f"Opening {side} position at {price} (Size: {POSITION_SIZE_PERCENT*100}% of Balance: {balance} USDT, Leverage: {LEVERAGE}x -> {trade_amount:.4f} BTC)")
             
+            from config import STOP_LOSS_PERCENT
+            
             if side == 'LONG':
-                self.client.create_order('buy', trade_amount)
+                # 1. Open Market Long
+                order_resp = self.client.create_order('buy', trade_amount)
+                if order_resp:
+                    # 2. Set Stop Loss (Sell order)
+                    stop_price = price * (1 - STOP_LOSS_PERCENT)
+                    self.client.create_stop_loss_order('sell', trade_amount, stop_price)
             else:
-                self.client.create_order('sell', trade_amount)
+                # 1. Open Market Short
+                order_resp = self.client.create_order('sell', trade_amount)
+                if order_resp:
+                    # 2. Set Stop Loss (Buy order)
+                    stop_price = price * (1 + STOP_LOSS_PERCENT)
+                    self.client.create_stop_loss_order('buy', trade_amount, stop_price)
+            
             self.in_position = True
             self.trade_history.append(time.time())
             

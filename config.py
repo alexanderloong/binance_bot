@@ -16,3 +16,7 @@ EMA_LENGTH = 99              # Stronger trend filter
 LEVERAGE = 12
 POSITION_SIZE_PERCENT = 0.9   # Trading with 90% of balance per position
 MAX_TRADES_PER_HOUR = 5       # Safety: Limit max trades per hour to prevent spamming
+
+# Protection Settings
+STOP_LOSS_PERCENT = 0.03      # 2% stop loss từ giá entry
+USE_MARK_PRICE_FOR_STOP = True # Dùng Mark Price để tránh râu nến quét ảo

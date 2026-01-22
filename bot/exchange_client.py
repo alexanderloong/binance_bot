@@ -72,11 +72,42 @@ class ExchangeClient:
                 quantity=round(amount, 3)
             )
             if order:
-                self.logger.info(f"Order Successful: {side} {amount} {self.symbol} - ID: {order.get('orderId')} - Status: {order.get('status')}")
+                self.logger.info(f"Market Order Successful: {side} {amount} {self.symbol} - ID: {order.get('orderId')}")
             return order
         except Exception as e:
-            self.logger.error(f"Error creating order: {e}")
+            self.logger.error(f"Error creating market order: {e}")
             return None
+
+    def create_stop_loss_order(self, side, amount, stop_price):
+        """Creates a STOP_MARKET order using Mark Price to protect against wicks."""
+        try:
+            side = side.upper()
+            # workingType='MARK_PRICE' is the key to ignore exchange-specific wicks
+            order = self.client.new_order(
+                symbol=self.symbol,
+                side=side,
+                type='STOP_MARKET',
+                stopPrice=round(stop_price, 2),
+                quantity=round(amount, 3),
+                workingType='MARK_PRICE',
+                reduceOnly=True # Crucial: SL should only reduce position, not open a new one
+            )
+            if order:
+                self.logger.info(f"Stop Market Order (SL) Set at {stop_price} (Mark Price) - ID: {order.get('orderId')}")
+            return order
+        except Exception as e:
+            self.logger.error(f"Error creating Stop Loss order: {e}")
+            return None
+
+    def cancel_all_orders(self):
+        """Cancels all open orders (like old Stop Losses) for the symbol."""
+        try:
+            self.client.cancel_open_orders(symbol=self.symbol)
+            self.logger.info(f"Canceled all open orders for {self.symbol}")
+            return True
+        except Exception as e:
+            self.logger.warning(f"Could not cancel open orders: {e}")
+            return False
 
     def get_balance(self):
         try:
@@ -109,13 +140,18 @@ class ExchangeClient:
                     amt = float(pos['positionAmt'])
                     if amt != 0:
                         side = 'SELL' if amt > 0 else 'BUY'
+                        # 1. Cancel any existing SL orders first
+                        self.cancel_all_orders()
+                        
+                        # 2. Place Market Order to close
                         order = self.client.new_order(
                             symbol=self.symbol,
                             side=side,
                             type='MARKET',
                             quantity=abs(amt)
                         )
-                        self.logger.info(f"Closed position for {self.symbol}. Amount: {amt} - Order ID: {order.get('orderId')} - Status: {order.get('status')}")
+                        self.logger.info(f"Closed position for {self.symbol}. Amount: {amt} - Order ID: {order.get('orderId')}")
+            return True
             return True
         except Exception as e:
             self.logger.error(f"Error closing positions: {e}")
