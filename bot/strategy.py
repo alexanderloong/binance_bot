@@ -133,10 +133,14 @@ class Strategy:
         elif current_trend == -1 and previous_trend == 1 and is_downtrend_short:
             signal = 'SHORT'
             
-        # Only open if we have NO position (Empty State)
-        if signal and current_pos_amt == 0:
-            self.logger.info(f"SIGNAL DETECTED: {signal} (Position is Empty)")
-            self.open_position(signal, close_price)
+        if signal:
+            if current_pos_amt == 0:
+                self.logger.info(f"SIGNAL DETECTED: {signal} (Position is Empty)")
+                self.open_position(signal, close_price)
+            else:
+                self.logger.info(f"SIGNAL DETECTED: {signal}, but already in position ({current_pos_amt}). Skipping.")
+        else:
+            self.logger.info(f"No entry signal for {candle_time} (Current Trend: {current_trend}, Position: {current_pos_amt})")
 
     def close_all_positions(self):
         self.logger.info("Closing all existing positions...")

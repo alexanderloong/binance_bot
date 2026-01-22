@@ -71,6 +71,8 @@ class ExchangeClient:
                 type='MARKET',
                 quantity=round(amount, 3)
             )
+            if order:
+                self.logger.info(f"Order Successful: {side} {amount} {self.symbol} - ID: {order.get('orderId')} - Status: {order.get('status')}")
             return order
         except Exception as e:
             self.logger.error(f"Error creating order: {e}")
@@ -107,13 +109,13 @@ class ExchangeClient:
                     amt = float(pos['positionAmt'])
                     if amt != 0:
                         side = 'SELL' if amt > 0 else 'BUY'
-                        self.client.new_order(
+                        order = self.client.new_order(
                             symbol=self.symbol,
                             side=side,
                             type='MARKET',
                             quantity=abs(amt)
                         )
-                        self.logger.info(f"Closed position for {self.symbol}. Amount: {amt}")
+                        self.logger.info(f"Closed position for {self.symbol}. Amount: {amt} - Order ID: {order.get('orderId')} - Status: {order.get('status')}")
             return True
         except Exception as e:
             self.logger.error(f"Error closing positions: {e}")
