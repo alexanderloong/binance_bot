@@ -182,11 +182,11 @@ class ExchangeClient:
                     
             for pos in positions:
                 if pos['symbol'] == self.symbol:
-                    return float(pos['positionAmt'])
-            return 0.0
+                    return float(pos['positionAmt']), float(pos.get('entryPrice', 0))
+            return 0.0, 0.0
         except Exception as e:
             self.logger.error(f"Error fetching position: {e}")
-            return 0.0
+            return 0.0, 0.0
 
     def close_all_positions(self):
         """Closes all positions for the current symbol by placing an offsetting market order."""

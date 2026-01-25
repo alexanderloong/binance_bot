@@ -1,5 +1,5 @@
 from .data_processor import DataProcessor
-from config import SUPERTREND_LENGTH, SUPERTREND_FACTOR, EMA_LENGTH, TIMEFRAME, ADX_LENGTH, ADX_THRESHOLD, ATR_LENGTH
+from config import SUPERTREND_LENGTH, SUPERTREND_FACTOR, EMA_LENGTH, TIMEFRAME, ADX_LENGTH, ADX_THRESHOLD, ATR_LENGTH, ATR_MULTIPLIER
 from datetime import datetime, timedelta
 import pytz
 
@@ -10,6 +10,7 @@ class Strategy:
         self.in_position = False 
         self.last_candle_time = None
         self.trade_history = [] # For rate limiting
+        self.stop_loss_price = None
         
         # Parse timeframe for stale candle checking
         self.tf_seconds = 900 # Default 15m
@@ -40,6 +41,33 @@ class Strategy:
         if df is None or df.empty:
             self.logger.error("No data received from exchange.")
             return False
+        
+        # --- 1. POSITION MANAGEMENT (Every Poll) ---
+        current_pos_amt, entry_price = self.client.get_current_position()
+        
+        if current_pos_amt != 0:
+             current_price = df['close'].iloc[-1] # Current mark/last price
+             
+             # Reconstruct Stop Loss if missing (e.g. after bot restart)
+             if self.stop_loss_price is None:
+                 # Fetch ATR of the last closed candle to calculate approximate SL
+                 df_ha = DataProcessor.calculate_heikin_ashi(df)
+                 atr_val = DataProcessor.calculate_atr(df_ha, ATR_LENGTH).iloc[-2]
+                 if current_pos_amt > 0:
+                     self.stop_loss_price = entry_price - (atr_val * ATR_MULTIPLIER)
+                 else:
+                     self.stop_loss_price = entry_price + (atr_val * ATR_MULTIPLIER)
+                 self.logger.info(f"Reconstructed SOFTWARE STOP LOSS at {self.stop_loss_price:.2f} (Entry: {entry_price:.2f})")
+
+             # Check for Stop Loss hit
+             is_sl_hit = (current_pos_amt > 0 and current_price <= self.stop_loss_price) or \
+                         (current_pos_amt < 0 and current_price >= self.stop_loss_price)
+             
+             if is_sl_hit:
+                 self.logger.warning(f"SOFTWARE STOP LOSS HIT at {current_price:.2f} (Target: {self.stop_loss_price:.2f}). Closing position.")
+                 self.close_all_positions()
+                 self.stop_loss_price = None
+                 return # Skip further analysis this cycle
 
         # --- FIX: Prevent Multi-Entry and Flickering ---
         try:
@@ -116,10 +144,10 @@ class Strategy:
         is_uptrend_long = close_price > ema_val
         is_downtrend_short = close_price < ema_val
         
-        # 0. Get Real Position from Exchange
-        current_pos_amt = self.client.get_current_position()
+        # current_pos_amt already fetched above
         
         # 1. LOGIC ĐÓNG LỆNH (Exit Priority)
+        # Note: Position management (SL) is handled at the start of run_analysis
         if current_pos_amt > 0 and current_trend == -1: # Existing Long & Trend turns Red
              self.logger.info(f"Trend flipped to RED. Closing LONG position ({current_pos_amt}).")
              self.close_all_positions()
@@ -179,8 +207,20 @@ class Strategy:
             
             self.logger.info(f"Opening {side} position at {price} (Size: {POSITION_SIZE_PERCENT*100}% of Balance: {balance} USDT, Leverage: {LEVERAGE}x -> {trade_amount:.4f} BTC)")
             
-            self.logger.info(f"Opening {side} position at {price} (Size: {POSITION_SIZE_PERCENT*100}% of Balance: {balance} USDT, Leverage: {LEVERAGE}x -> {trade_amount:.4f} BTC)")
+            # --- CALCULATE ATR-BASED STOP LOSS ---
+            # Fetch ATR of the last closed candle (the one that generated the signal)
+            df_temp = self.client.fetch_ohlcv(limit=30) # Small fetch just for ATR
+            df_ha_temp = DataProcessor.calculate_heikin_ashi(df_temp)
+            atr_val = DataProcessor.calculate_atr(df_ha_temp, ATR_LENGTH).iloc[-2]
             
+            if side == 'LONG':
+                 self.stop_loss_price = price - (atr_val * ATR_MULTIPLIER)
+            else:
+                 self.stop_loss_price = price + (atr_val * ATR_MULTIPLIER)
+            
+            self.logger.info(f"Setting SOFTWARE STOP LOSS at {self.stop_loss_price:.2f} (ATR: {atr_val:.2f} x {ATR_MULTIPLIER})")
+            # -------------------------------------
+
             # Open Market Order (Long or Short)
             order_resp = self.client.create_order('buy' if side == 'LONG' else 'sell', trade_amount)
             
