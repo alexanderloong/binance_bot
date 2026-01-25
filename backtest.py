@@ -145,7 +145,7 @@ def simulate(df, use_ema_filter=True):
 
 def run_backtest():
     print(f"--- Backtest for {SYMBOL} ({TIMEFRAME}) ---")
-    print(f"Strategy: EMA {EMA_LENGTH}, SuperTrend {SUPERTREND_LENGTH}/{SUPERTREND_FACTOR}")
+    print(f"Strategy: EMA {EMA_LENGTH}, SuperTrend {SUPERTREND_LENGTH}/{SUPERTREND_FACTOR}, ADX > {ADX_THRESHOLD}, SL: {ATR_MULTIPLIER}xATR")
     
     symbol_clean = SYMBOL.replace("/", "_").replace("\\", "_")
     cache_file = f"backtest_data_{symbol_clean}_{TIMEFRAME}.csv"

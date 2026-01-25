@@ -173,7 +173,7 @@ class Strategy:
         if signal:
             if current_pos_amt == 0:
                 self.logger.info(f"SIGNAL DETECTED: {signal} (Position is Empty)")
-                self.open_position(signal, close_price)
+                self.open_position(signal, close_price, atr_val)
             else:
                 self.logger.info(f"SIGNAL DETECTED: {signal}, but already in position ({current_pos_amt}). Skipping.")
         else:
@@ -185,8 +185,8 @@ class Strategy:
         if self.client.close_all_positions():
             self.in_position = False
 
-    def open_position(self, side, price):
-        from config import POSITION_SIZE_PERCENT, LEVERAGE
+    def open_position(self, side, price, atr_val):
+        from config import POSITION_SIZE_PERCENT, LEVERAGE, ATR_MULTIPLIER
         import time
         
         # Safety Check: Rate Limit
@@ -208,11 +208,6 @@ class Strategy:
             self.logger.info(f"Opening {side} position at {price} (Size: {POSITION_SIZE_PERCENT*100}% of Balance: {balance} USDT, Leverage: {LEVERAGE}x -> {trade_amount:.4f} BTC)")
             
             # --- CALCULATE ATR-BASED STOP LOSS ---
-            # Fetch ATR of the last closed candle (the one that generated the signal)
-            df_temp = self.client.fetch_ohlcv(limit=30) # Small fetch just for ATR
-            df_ha_temp = DataProcessor.calculate_heikin_ashi(df_temp)
-            atr_val = DataProcessor.calculate_atr(df_ha_temp, ATR_LENGTH).iloc[-2]
-            
             if side == 'LONG':
                  self.stop_loss_price = price - (atr_val * ATR_MULTIPLIER)
             else:
