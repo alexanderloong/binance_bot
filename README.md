@@ -1,6 +1,6 @@
 # Binance SuperTrend & EMA Trading Bot 🚀
 
-A robust, automated cryptocurrency trading bot for Binance Futures, built with Python. This bot utilizes a trend-following strategy combining **SuperTrend** and **EMA 100** (default) to capture major market moves while filtering out noise.
+A robust, automated cryptocurrency trading bot for Binance Futures, built with Python. This bot utilizes a trend-following strategy combining **SuperTrend** and **EMA 99** (default) to capture major market moves while filtering out noise.
 
 ![Python](https://img.shields.io/badge/Python-3.8+-blue.svg)
 ![License](https://img.shields.io/badge/License-MIT-green.svg)
@@ -10,7 +10,7 @@ A robust, automated cryptocurrency trading bot for Binance Futures, built with P
 *   **Automated Trading**: Executes Long and Short positions 24/7 using the **Official Binance SDK** (`binance-connector`).
 *   **Trend Following Strategy**: Uses SuperTrend for signals, EMA for trend confirmation, and **ADX** for strength filtering.
 *   **Robust Backtesting**: Includes a built-in backtester with historical data caching, PnL calculation, and Max Drawdown analysis.
-*   **Risk Management**: Configurable position sizing and leverage.
+*   **Risk Management**: Configurable position sizing, leverage, and **Dynamic ATR Stop Loss**.
 *   **Resilient**: Handles API connection errors and gracefully manages Binance Testnet quirks.
 *   **Testnet Support**: Safely test strategies on Binance Testnet before going live.
 
@@ -35,9 +35,10 @@ The execution logic is split into two independent steps: **Exit (Priority)** and
 | :--- | :--- | :--- | :--- | :--- | :--- |
 | **Empty** | Red $\rightarrow$ **Green** | Price > EMA 99 | **ADX > 25** | **Open LONG** | LONG |
 | **Empty** | Red $\rightarrow$ **Green** | Price > EMA 99 | ADX < 25 | Wait (Weak Trend) | Empty |
-| **Empty** | Green $\rightarrow$ **Red** | Price < EMA 99 | **ADX > 25** | **Open SHORT** | SHORT |
+| **Empty** | Green $\rightarrow$ **Red** | Price < EMA 99 | **ADX > 22** | **Open SHORT** | SHORT |
 | **LONG** | Green $\rightarrow$ **Red** | Any | Any | **Close LONG** | Empty |
 | **SHORT** | Red $\rightarrow$ **Green** | Any | Any | **Close SHORT** | Empty |
+| **ANY** | Any | Any | Any | **ATR Stop Loss** | Empty |
 
 **Key Principles:**
 *   **Active Profit/Loss Protection**: Positions are closed immediately when the SuperTrend flips, ensuring the bot doesn't hold against the trend.
@@ -109,9 +110,11 @@ SYMBOL = "BTC/USDT"
 TIMEFRAME = "15m"
 SUPERTREND_LENGTH = 15
 SUPERTREND_FACTOR = 1.5
-EMA_LENGTH = 100
-LEVERAGE = 20
-POSITION_SIZE_PERCENT = 1  # 1.0 = 100% of balance
+EMA_LENGTH = 99
+LEVERAGE = 10
+POSITION_SIZE_PERCENT = 0.2  # 0.2 = 20% of balance
+ADX_THRESHOLD = 22
+ATR_MULTIPLIER = 1.5
 ```
 
 ---

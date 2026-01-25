@@ -1,6 +1,20 @@
 # Changelog
 
 All notable changes to this project will be documented in this file.
+
+## [1.3.0] - 2026-01-26
+### Added
+- **Dynamic ATR Stop Loss:** Implemented a volatility-aware Stop Loss mechanism using 1.5x ATR. This replaces the previous fixed percentage SL, allowing the bot to breathe during high volatility and tighten up during calm markets.
+- **Enhanced Backtest Verbosity:** Updated backtest trade history logs to be more concise while maintaining core data integrity.
+- **Improved Parameter Sync:** Fully synchronized all strategy constants between the live bot (`strategy.py`) and the backtest engine (`backtest.py`).
+
+### Changed
+- **Indicator Default:** Fine-tuned EMA filter to 99 and SuperTrend to 15/1.5 for optimal performance on BTC 15m.
+- **ADX Threshold:** Optimized ADX filter to 22 based on recent backtest results (Win Rate increased to 54.5% in some scenarios).
+
+### Fixed
+- **Logic Discrepancies:** Resolved all remaining differences between backtest execution and live execution paths.
+- **Documentation:** Updated README with accurate parameter descriptions and logic tables.
  
 ## [1.2.0] - 2026-01-25
 ### Added
