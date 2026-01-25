@@ -179,25 +179,14 @@ class Strategy:
             
             self.logger.info(f"Opening {side} position at {price} (Size: {POSITION_SIZE_PERCENT*100}% of Balance: {balance} USDT, Leverage: {LEVERAGE}x -> {trade_amount:.4f} BTC)")
             
-            from config import STOP_LOSS_PERCENT
+            self.logger.info(f"Opening {side} position at {price} (Size: {POSITION_SIZE_PERCENT*100}% of Balance: {balance} USDT, Leverage: {LEVERAGE}x -> {trade_amount:.4f} BTC)")
             
-            if side == 'LONG':
-                # 1. Open Market Long
-                order_resp = self.client.create_order('buy', trade_amount)
-                if order_resp:
-                    # 2. Set Stop Loss (Sell order)
-                    stop_price = price * (1 - STOP_LOSS_PERCENT)
-                    self.client.create_stop_loss_order('sell', trade_amount, stop_price)
-            else:
-                # 1. Open Market Short
-                order_resp = self.client.create_order('sell', trade_amount)
-                if order_resp:
-                    # 2. Set Stop Loss (Buy order)
-                    stop_price = price * (1 + STOP_LOSS_PERCENT)
-                    self.client.create_stop_loss_order('buy', trade_amount, stop_price)
+            # Open Market Order (Long or Short)
+            order_resp = self.client.create_order('buy' if side == 'LONG' else 'sell', trade_amount)
             
-            self.in_position = True
-            self.trade_history.append(time.time())
+            if order_resp:
+                self.in_position = True
+                self.trade_history.append(time.time())
             
         except Exception as e:
             self.logger.error(f"Failed to open position: {e}")

@@ -10,7 +10,7 @@ A robust, automated cryptocurrency trading bot for Binance Futures, built with P
 *   **Automated Trading**: Executes Long and Short positions 24/7 using the **Official Binance SDK** (`binance-connector`).
 *   **Trend Following Strategy**: Uses SuperTrend for signals, EMA for trend confirmation, and **ADX** for strength filtering.
 *   **Robust Backtesting**: Includes a built-in backtester with historical data caching, PnL calculation, and Max Drawdown analysis.
-*   **Risk Management**: Configurable position sizing, leverage, and **Hard Stop Loss**.
+*   **Risk Management**: Configurable position sizing and leverage.
 *   **Resilient**: Handles API connection errors and gracefully manages Binance Testnet quirks.
 *   **Testnet Support**: Safely test strategies on Binance Testnet before going live.
 
@@ -38,7 +38,6 @@ The execution logic is split into two independent steps: **Exit (Priority)** and
 | **Empty** | Green $\rightarrow$ **Red** | Price < EMA 99 | **ADX > 25** | **Open SHORT** | SHORT |
 | **LONG** | Green $\rightarrow$ **Red** | Any | Any | **Close LONG** | Empty |
 | **SHORT** | Red $\rightarrow$ **Green** | Any | Any | **Close SHORT** | Empty |
-| **Any** | Any | Any | Any | **Stop Loss** | Empty |
 
 **Key Principles:**
 *   **Active Profit/Loss Protection**: Positions are closed immediately when the SuperTrend flips, ensuring the bot doesn't hold against the trend.

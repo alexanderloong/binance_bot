@@ -1,7 +1,7 @@
 import pandas as pd
 from bot.exchange_client import ExchangeClient
 from bot.data_processor import DataProcessor
-from config import SYMBOL, TIMEFRAME, SUPERTREND_LENGTH, SUPERTREND_FACTOR, EMA_LENGTH, POSITION_SIZE_PERCENT, LEVERAGE, ADX_LENGTH, ADX_THRESHOLD, ATR_LENGTH, STOP_LOSS_PERCENT
+from config import SYMBOL, TIMEFRAME, SUPERTREND_LENGTH, SUPERTREND_FACTOR, EMA_LENGTH, POSITION_SIZE_PERCENT, LEVERAGE, ADX_LENGTH, ADX_THRESHOLD, ATR_LENGTH
 import os
 import time
 from datetime import datetime, date, timedelta
@@ -11,7 +11,6 @@ def simulate(df, use_ema_filter=True):
     balance = initial_balance
     position_amt = 0 
     entry_price = 0
-    stop_loss_price = 0
     trades = []
     # Fee: 0.05% for Taker (Market Orders)
     commission_rate = 0.00045
@@ -50,22 +49,6 @@ def simulate(df, use_ema_filter=True):
             trades.append({'time': timestamp, 'type': 'CLOSE_SHORT', 'price': price, 'pnl': pnl})
             position_amt = 0
 
-        # 1b. STOP LOSS CHECK
-        if position_amt > 0 and price <= stop_loss_price:
-            raw_pnl = (stop_loss_price - entry_price) * position_amt
-            fee = (stop_loss_price * abs(position_amt)) * commission_rate
-            pnl = raw_pnl - fee
-            balance += pnl
-            trades.append({'time': timestamp, 'type': 'STOP_LOSS_LONG', 'price': stop_loss_price, 'pnl': pnl})
-            position_amt = 0
-        elif position_amt < 0 and price >= stop_loss_price:
-            raw_pnl = (entry_price - stop_loss_price) * abs(position_amt)
-            fee = (stop_loss_price * abs(position_amt)) * commission_rate
-            pnl = raw_pnl - fee
-            balance += pnl
-            trades.append({'time': timestamp, 'type': 'STOP_LOSS_SHORT', 'price': stop_loss_price, 'pnl': pnl})
-            position_amt = 0
-
         # 2. ENTRY LOGIC
         is_uptrend = price > ema_val if use_ema_filter else True
         is_downtrend = price < ema_val if use_ema_filter else True
@@ -93,12 +76,6 @@ def simulate(df, use_ema_filter=True):
             position_amt = amount if signal == 'LONG' else -amount
             entry_price = price
             
-            # Set Stop Loss
-            if signal == 'LONG':
-                stop_loss_price = price * (1 - STOP_LOSS_PERCENT)
-            else:
-                stop_loss_price = price * (1 + STOP_LOSS_PERCENT)
-            
             # Record entry just for tracking, PnL is usually realized on close (or you can account for fee here)
             # To match balance tracking: we already deducted entry_fee from balance.
             # We can record a small negative PnL for the entry fee to track drawdown accurately
@@ -115,7 +92,7 @@ def simulate(df, use_ema_filter=True):
 
     # Stats calculation
     # Count only closed trades for win rate
-    closed_trades = [t for t in trades if 'CLOSE' in t['type'] or 'STOP_LOSS' in t['type']]
+    closed_trades = [t for t in trades if 'CLOSE' in t['type']]
     total_trades_count = len(closed_trades)
     
     # Win = PnL > 0 (Fee is already included in PnL)

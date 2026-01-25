@@ -6,8 +6,8 @@ All notable changes to this project will be documented in this file.
 ### Added
 - **Trend Strength Filter (ADX):** Integrated Average Directional Index (ADX) to filter out weak trends. Bot now only enters trades when ADX > 25, significantly reducing noise in sideways markets.
 - **Volatility Tracking (ATR):** Added Average True Range (ATR) calculation for better market volatility awareness.
-- **Hard Stop Loss (Live & Backtest):** Implemented automated Stop Loss (default: 3%) in both live trading (via `STOP_MARKET` orders) and the backtesting engine for uniform risk management.
 - **Startup Analysis:** Bot now performs a full market analysis immediately upon startup, providing instant feedback on indicators (ADX, ATR, EMA, Trend).
+- **Stop Loss Removal:** Removed automated Stop Loss logic due to Binance API migration constraints and simplified risk management.
 
 ### Changed
 - **Backtest Synchronicity:** Refactored `backtest.py` to match the exact logic of `main.py`, including ADX filters and commission-adjusted PnL.
