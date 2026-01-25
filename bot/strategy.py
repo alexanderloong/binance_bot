@@ -1,5 +1,5 @@
 from .data_processor import DataProcessor
-from config import SUPERTREND_LENGTH, SUPERTREND_FACTOR, EMA_LENGTH, TIMEFRAME
+from config import SUPERTREND_LENGTH, SUPERTREND_FACTOR, EMA_LENGTH, TIMEFRAME, ADX_LENGTH, ADX_THRESHOLD, ATR_LENGTH
 from datetime import datetime, timedelta
 import pytz
 
@@ -35,12 +35,10 @@ class Strategy:
         return True
 
     def run_analysis(self):
-        # self.logger.info("Fetching market data...")
-        # Fetch 300 candles to ensure EMA 100 and SuperTrend have enough history to stabilize
         df = self.client.fetch_ohlcv(limit=300)
         
         if df is None or df.empty:
-            self.logger.error("No data received.")
+            self.logger.error("No data received from exchange.")
             return False
 
         # --- FIX: Prevent Multi-Entry and Flickering ---
@@ -59,21 +57,10 @@ class Strategy:
                 # self.logger.debug(f"API Flicker detected: {last_closed_time} is older than last processed.")
                 return False
 
-            # --- STALENESS CHECK ---
-            # If the candle closed too long ago, we should skip processing to avoid late entries
+            # Calculate Latency/Delay
             candle_close_time = last_closed_time + timedelta(seconds=self.tf_seconds)
             now = datetime.now(last_closed_time.tzinfo)
             delay_seconds = (now - candle_close_time).total_seconds()
-            
-            STALE_TOLERANCE = 120 
-            
-            if delay_seconds > STALE_TOLERANCE:
-                # Mark as seen to prevent repeated stale logs, but only if it's newer than what we have
-                if self.last_candle_time is None or last_closed_ts_val > self.last_candle_time:
-                    self.last_candle_time = last_closed_ts_val
-                
-                self.logger.warning(f"Candle {last_closed_time} is STALE (Closed {int(delay_seconds)}s ago). Skipping trade logic.")
-                return False
             
             # 3. SUCCESS: It's a fresh, new candle.
             self.last_candle_time = last_closed_ts_val
@@ -84,16 +71,18 @@ class Strategy:
             return False
         # -----------------------------------------------
 
-        self.logger.info("Calculating Heikin Ashi, SuperTrend, and EMA...")
         df_ha = DataProcessor.calculate_heikin_ashi(df)
         df_st = DataProcessor.calculate_supertrend(df_ha)
-        df_final = DataProcessor.calculate_ema(df_st, length=EMA_LENGTH)
+        df_st[f'EMA_{EMA_LENGTH}'] = DataProcessor.calculate_ema(df_st, length=EMA_LENGTH)[f'EMA_{EMA_LENGTH}']
+        df_st['ADX'] = DataProcessor.calculate_adx(df, length=ADX_LENGTH)
+        df_st['ATR'] = DataProcessor.calculate_atr(df, length=ATR_LENGTH)
+        df_final = df_st
         
         # Get the last closed candle (second to last row, as last row is unfinished)
         last_candle = df_final.iloc[-2]
         prev_candle = df_final.iloc[-3]
         
-        # SuperTrend columns will be named like SUPERT_15_1.5, SUPERTd_15_1.5 (direction), SUPERTl_15_1.5 (long), SUPERTs_15_1.5 (short)
+        # SuperTrend columns will be named like SUPERT_15_1.5
         st_col = f"SUPERT_{SUPERTREND_LENGTH}_{SUPERTREND_FACTOR}"
         st_dir_col = f"SUPERTd_{SUPERTREND_LENGTH}_{SUPERTREND_FACTOR}" # 1 for Buy, -1 for Sell
         
@@ -102,9 +91,23 @@ class Strategy:
         
         close_price = last_candle['close']
         ema_val = last_candle[f'EMA_{EMA_LENGTH}']
+        adx_val = last_candle['ADX']
+        atr_val = last_candle['ATR']
         candle_time = last_candle['timestamp'].strftime('%d-%m-%Y %H:%M:%S')
         
-        self.logger.info(f"Analysis Complete for candle {candle_time}. Close: {close_price}, Trend: {current_trend}, EMA {EMA_LENGTH}: {ema_val:.2f}")
+        self.logger.info(f"Market Data: {candle_time} | Close: {close_price} | Trend: {current_trend} | EMA{EMA_LENGTH}: {ema_val:.2f} | ADX: {adx_val:.2f} | ATR: {atr_val:.2f}")
+
+        # --- STALENESS CHECK (Only skip TRADE logic, not analysis logging) ---
+        STALE_TOLERANCE = 120 
+        
+        if delay_seconds > STALE_TOLERANCE:
+            if self.last_candle_time is None or last_closed_ts_val > self.last_candle_time:
+                self.last_candle_time = last_closed_ts_val
+            self.logger.warning(f"Candle {last_closed_time} is STALE (Closed {int(delay_seconds)}s ago). Skipping trade logic.")
+            return False
+
+        # Determine Trend Strength
+        is_trending = adx_val > ADX_THRESHOLD
         
         # Determine Signal based on Trend Flip + EMA Filter
         signal = None
@@ -129,9 +132,15 @@ class Strategy:
         # 2. LOGIC MỞ LỆNH (Entry Filtered)
         signal = None
         if current_trend == 1 and previous_trend == -1 and is_uptrend_long:
-            signal = 'LONG'
+            if is_trending:
+                signal = 'LONG'
+            else:
+                self.logger.info(f"LONG signal detected, but ADX ({adx_val:.2f}) is below threshold ({ADX_THRESHOLD}). Skipping.")
         elif current_trend == -1 and previous_trend == 1 and is_downtrend_short:
-            signal = 'SHORT'
+            if is_trending:
+                signal = 'SHORT'
+            else:
+                self.logger.info(f"SHORT signal detected, but ADX ({adx_val:.2f}) is below threshold ({ADX_THRESHOLD}). Skipping.")
             
         if signal:
             if current_pos_amt == 0:

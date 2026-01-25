@@ -1,7 +1,7 @@
 import pandas as pd
 from bot.exchange_client import ExchangeClient
 from bot.data_processor import DataProcessor
-from config import SYMBOL, TIMEFRAME, SUPERTREND_LENGTH, SUPERTREND_FACTOR, EMA_LENGTH, POSITION_SIZE_PERCENT, LEVERAGE
+from config import SYMBOL, TIMEFRAME, SUPERTREND_LENGTH, SUPERTREND_FACTOR, EMA_LENGTH, POSITION_SIZE_PERCENT, LEVERAGE, ADX_LENGTH, ADX_THRESHOLD, ATR_LENGTH, STOP_LOSS_PERCENT
 import os
 import time
 from datetime import datetime, date, timedelta
@@ -11,9 +11,10 @@ def simulate(df, use_ema_filter=True):
     balance = initial_balance
     position_amt = 0 
     entry_price = 0
+    stop_loss_price = 0
     trades = []
     # Fee: 0.05% for Taker (Market Orders)
-    commission_rate = 0.0005
+    commission_rate = 0.00045
     
     st_dir_col = f"SUPERTd_{SUPERTREND_LENGTH}_{SUPERTREND_FACTOR}"
     # Use the custom EMA column if provided (for comparison), otherwise default to config EMA
@@ -49,15 +50,37 @@ def simulate(df, use_ema_filter=True):
             trades.append({'time': timestamp, 'type': 'CLOSE_SHORT', 'price': price, 'pnl': pnl})
             position_amt = 0
 
+        # 1b. STOP LOSS CHECK
+        if position_amt > 0 and price <= stop_loss_price:
+            raw_pnl = (stop_loss_price - entry_price) * position_amt
+            fee = (stop_loss_price * abs(position_amt)) * commission_rate
+            pnl = raw_pnl - fee
+            balance += pnl
+            trades.append({'time': timestamp, 'type': 'STOP_LOSS_LONG', 'price': stop_loss_price, 'pnl': pnl})
+            position_amt = 0
+        elif position_amt < 0 and price >= stop_loss_price:
+            raw_pnl = (entry_price - stop_loss_price) * abs(position_amt)
+            fee = (stop_loss_price * abs(position_amt)) * commission_rate
+            pnl = raw_pnl - fee
+            balance += pnl
+            trades.append({'time': timestamp, 'type': 'STOP_LOSS_SHORT', 'price': stop_loss_price, 'pnl': pnl})
+            position_amt = 0
+
         # 2. ENTRY LOGIC
         is_uptrend = price > ema_val if use_ema_filter else True
         is_downtrend = price < ema_val if use_ema_filter else True
         
+        # New: ADX Filter
+        adx_val = current_candle['ADX']
+        is_trending = adx_val > ADX_THRESHOLD
+        
         signal = None
         if curr_trend == 1 and prev_trend == -1 and is_uptrend:
-            signal = 'LONG'
+            if is_trending:
+                signal = 'LONG'
         elif curr_trend == -1 and prev_trend == 1 and is_downtrend:
-            signal = 'SHORT'
+            if is_trending:
+                signal = 'SHORT'
             
         if signal and position_amt == 0:
             trade_value = balance * POSITION_SIZE_PERCENT * LEVERAGE
@@ -69,6 +92,12 @@ def simulate(df, use_ema_filter=True):
             amount = trade_value / price
             position_amt = amount if signal == 'LONG' else -amount
             entry_price = price
+            
+            # Set Stop Loss
+            if signal == 'LONG':
+                stop_loss_price = price * (1 - STOP_LOSS_PERCENT)
+            else:
+                stop_loss_price = price * (1 + STOP_LOSS_PERCENT)
             
             # Record entry just for tracking, PnL is usually realized on close (or you can account for fee here)
             # To match balance tracking: we already deducted entry_fee from balance.
@@ -86,7 +115,7 @@ def simulate(df, use_ema_filter=True):
 
     # Stats calculation
     # Count only closed trades for win rate
-    closed_trades = [t for t in trades if 'CLOSE' in t['type']]
+    closed_trades = [t for t in trades if 'CLOSE' in t['type'] or 'STOP_LOSS' in t['type']]
     total_trades_count = len(closed_trades)
     
     # Win = PnL > 0 (Fee is already included in PnL)
@@ -166,7 +195,10 @@ def run_backtest():
     print(f"Processing {len(df)} candles...")
     df_ha = DataProcessor.calculate_heikin_ashi(df)
     df_st = DataProcessor.calculate_supertrend(df_ha)
-    df_final = DataProcessor.calculate_ema(df_st, length=EMA_LENGTH)
+    df_st[f'EMA_{EMA_LENGTH}'] = DataProcessor.calculate_ema(df_st, length=EMA_LENGTH)[f'EMA_{EMA_LENGTH}']
+    df_st['ADX'] = DataProcessor.calculate_adx(df, length=ADX_LENGTH)
+    df_st['ATR'] = DataProcessor.calculate_atr(df, length=ATR_LENGTH)
+    df_final = df_st
     
     # Run simulation with verbose output (we will modify simulate to return trades and we print them)
     # Or just print after simulation

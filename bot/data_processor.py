@@ -26,9 +26,9 @@ class DataProcessor:
 
     @staticmethod
     def calculate_atr(df, length):
-        high = df['ha_high']
-        low = df['ha_low']
-        close = df['ha_close']
+        high = df['high']
+        low = df['low']
+        close = df['close']
         prev_close = close.shift(1)
         
         tr1 = high - low
@@ -36,8 +36,43 @@ class DataProcessor:
         tr3 = (low - prev_close).abs()
         
         tr = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
+        # Wilders Smoothing (equivalent to EWM with alpha=1/length)
         atr = tr.ewm(alpha=1/length, adjust=False).mean()
         return atr
+
+    @staticmethod
+    def calculate_adx(df, length):
+        # Standard Wilders DMI calculation
+        plus_dm = df['high'].diff()
+        minus_dm = -df['low'].diff()
+        
+        plus_dm[plus_dm < 0] = 0
+        minus_dm[minus_dm < 0] = 0
+        
+        plus_dm_mask = (plus_dm > minus_dm)
+        minus_dm_mask = (minus_dm > plus_dm)
+        
+        plus_dm[~plus_dm_mask] = 0
+        minus_dm[~minus_dm_mask] = 0
+        
+        tr = pd.concat([
+            df['high'] - df['low'],
+            (df['high'] - df['close'].shift(1)).abs(),
+            (df['low'] - df['close'].shift(1)).abs()
+        ], axis=1).max(axis=1)
+        
+        # Smoothed values using Wilders (EWM)
+        atr_smoothed = tr.ewm(alpha=1/length, adjust=False).mean()
+        plus_dm_smoothed = plus_dm.ewm(alpha=1/length, adjust=False).mean()
+        minus_dm_smoothed = minus_dm.ewm(alpha=1/length, adjust=False).mean()
+        
+        plus_di = 100 * (plus_dm_smoothed / atr_smoothed)
+        minus_di = 100 * (minus_dm_smoothed / atr_smoothed)
+        
+        dx = 100 * (plus_di - minus_di).abs() / (plus_di + minus_di)
+        adx = dx.ewm(alpha=1/length, adjust=False).mean()
+        
+        return adx
 
     @staticmethod
     def calculate_ema(df, length=200):
@@ -51,12 +86,22 @@ class DataProcessor:
         multiplier = SUPERTREND_FACTOR
         
         df = df.copy()
-        atr = DataProcessor.calculate_atr(df, length)
+        # SuperTrend usually uses HA candles if passed, or standard ones.
+        # Let's use the internal calculate_atr logic but specific to HA for SuperTrend
+        high = df['ha_high']
+        low = df['ha_low']
+        close_ha = df['ha_close']
+        prev_close_ha = close_ha.shift(1)
+        
+        tr1 = high - low
+        tr2 = (high - prev_close_ha).abs()
+        tr3 = (low - prev_close_ha).abs()
+        atr_ha = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1).ewm(alpha=1/length, adjust=False).mean()
         
         hl2 = (df['ha_high'] + df['ha_low']) / 2
         
-        basic_upperband = hl2 + (multiplier * atr)
-        basic_lowerband = hl2 - (multiplier * atr)
+        basic_upperband = hl2 + (multiplier * atr_ha)
+        basic_lowerband = hl2 - (multiplier * atr_ha)
         
         upperband = basic_upperband.copy()
         lowerband = basic_lowerband.copy()

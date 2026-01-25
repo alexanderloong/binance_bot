@@ -26,6 +26,10 @@ def main():
 
     logger.info("Bot is running. Press Ctrl+C to stop.")
     
+    # Run initial analysis once on startup
+    logger.info("Performing initial market analysis...")
+    strategy.run_analysis()
+    
     while True:
         try:
             # 1. Calculate time remaining until next candle close
