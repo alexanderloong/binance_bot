@@ -19,6 +19,7 @@ MAX_TRADES_PER_HOUR = 5       # Safety: Limit trades per hour to prevent API spa
 ADX_LENGTH = 14               # Standard ADX length
 ADX_THRESHOLD = 22         # Trend strength threshold (common: 20 or 25)
 ATR_LENGTH = 14               # Standard ATR length
+ATR_MULTIPLIER = 1.5          # ATR multiplier for Stop Loss (Proposed: 1.5 - 2.0)
 
 
 # Protection Settings
