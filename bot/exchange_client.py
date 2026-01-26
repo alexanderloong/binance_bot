@@ -112,7 +112,7 @@ class ExchangeClient:
                     symbol=self.symbol,
                     side=side,
                     type='MARKET',
-                    quantity=round(amount, 3),
+                    quantity=round(amount, 4),
                     recvWindow=10000
                 )
             except Exception as e:
@@ -123,7 +123,7 @@ class ExchangeClient:
                         symbol=self.symbol,
                         side=side,
                         type='MARKET',
-                        quantity=round(amount, 3),
+                        quantity=round(amount, 4),
                         recvWindow=10000
                     )
                 else:
