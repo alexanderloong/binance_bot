@@ -1,4 +1,4 @@
-# Binance SuperTrend & EMA Trading Bot 🚀
+# Binance SuperTrend & EMA Trading Bot 🚀 (v1.5.0)
 
 A robust, automated cryptocurrency trading bot for Binance Futures, built with Python. This bot utilizes a trend-following strategy combining **SuperTrend** and **EMA 99** (default) to capture major market moves while filtering out noise.
 
@@ -10,6 +10,7 @@ A robust, automated cryptocurrency trading bot for Binance Futures, built with P
 *   **Automated Trading**: Executes Long and Short positions 24/7 using the **Official Binance SDK** (`binance-connector`).
 *   **Trend Following Strategy**: Uses SuperTrend for signals, EMA for trend confirmation, and **ADX** for strength filtering.
 *   **High-Fidelity Backtesting**: Pre-flight your strategy with a simulator that uses **Live Binance Market Data** and accurately models candle-close execution timing.
+*   **Profit Optimization**: **Partial Take Profit (Partial TP)** allows locking in gains at 2.0x ATR while riding the remainder of the trend.
 *   **Risk Management**: Configurable position sizing, leverage, and **Dynamic ATR Stop Loss**.
 *   **Resilient**: Handles API connection errors and gracefully manages Binance Testnet quirks.
 *   **Testnet Support**: Safely test strategies on Binance Testnet before going live.
@@ -24,25 +25,27 @@ The bot implements an optimized trend-following strategy designed for the **15m 
 *   **Heikin Ashi Candles**: Smoothens price action for better trend identification.
 *   **SuperTrend (15, 1.5)**: Used to detect short-term price momentum shifts.
 *   **EMA 99**: Long-term trend filter. Trades are only opened in the direction of the EMA.
-*   **ADX (14)**: Trend Strength filter. Bot only enters when ADX > 25 (Trend is strong).
+*   **ADX (14)**: Trend Strength filter. Bot only enters when ADX > 22 (Trend is strong).
 *   **ATR (14)**: Measures market volatility.
 
 ### 2. Execution Logic (Capital Protection & Profit Optimization)
 
-The execution logic is split into two independent steps: **Exit (Priority)** and **Entry (Filtered)**.
+The execution logic is split into hai independent steps: **Exit (Priority)** and **Entry (Filtered)**.
 
 | Current State | Event (SuperTrend) | EMA Filter | ADX Filter | Action | Resulting State |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| **Empty** | Red $\rightarrow$ **Green** | Price > EMA 99 | **ADX > 25** | **Open LONG** | LONG |
-| **Empty** | Red $\rightarrow$ **Green** | Price > EMA 99 | ADX < 25 | Wait (Weak Trend) | Empty |
+| **Empty** | Red $\rightarrow$ **Green** | Price > EMA 99 | **ADX > 22** | **Open LONG** | LONG |
+| **Empty** | Red $\rightarrow$ **Green** | Price > EMA 99 | ADX < 22 | Wait (Weak Trend) | Empty |
 | **Empty** | Green $\rightarrow$ **Red** | Price < EMA 99 | **ADX > 22** | **Open SHORT** | SHORT |
 | **LONG** | Green $\rightarrow$ **Red** | Any | Any | **Close LONG** | Empty |
 | **SHORT** | Red $\rightarrow$ **Green** | Any | Any | **Close SHORT** | Empty |
+| **ANY** | Price hits **2.0x ATR** | Any | Any | **Partial TP (30%)** | Holding (Reduced) |
 | **ANY** | Any | Any | Any | **ATR Stop Loss** | Empty |
 
 **Key Principles:**
 *   **Active Profit/Loss Protection**: Positions are closed immediately when the SuperTrend flips, ensuring the bot doesn't hold against the trend.
 *   **Disciplined Entry**: New positions are only opened when the short-term trend (SuperTrend) aligns with the long-term trend (EMA).
+*   **Partial Take Profit**: Automatically takes partial profits to reduce risk and smooth the equity curve.
 
 ---
 
@@ -111,10 +114,13 @@ TIMEFRAME = "15m"
 SUPERTREND_LENGTH = 15
 SUPERTREND_FACTOR = 1.5
 EMA_LENGTH = 99
-LEVERAGE = 10
-POSITION_SIZE_PERCENT = 0.2  # 0.2 = 20% of balance
+LEVERAGE = 9
+POSITION_SIZE_PERCENT = 0.27
 ADX_THRESHOLD = 22
 ATR_MULTIPLIER = 1.5
+PARTIAL_TP_ENABLED = True
+PARTIAL_TP_MULTIPLIER = 2.0
+PARTIAL_TP_PERCENT = 0.3
 ```
 
 ---
