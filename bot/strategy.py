@@ -1,5 +1,5 @@
 from .data_processor import DataProcessor
-from config import SUPERTREND_LENGTH, SUPERTREND_FACTOR, EMA_LENGTH, TIMEFRAME, ADX_LENGTH, ADX_THRESHOLD, ATR_LENGTH, ATR_MULTIPLIER
+from config import SUPERTREND_LENGTH, SUPERTREND_FACTOR, EMA_LENGTH, TIMEFRAME, ADX_LENGTH, ADX_THRESHOLD, ATR_LENGTH, ATR_MULTIPLIER, PARTIAL_TP_ENABLED, PARTIAL_TP_MULTIPLIER, PARTIAL_TP_PERCENT
 from datetime import datetime, timedelta
 import pytz
 
@@ -11,6 +11,8 @@ class Strategy:
         self.last_candle_time = None
         self.trade_history = [] # For rate limiting
         self.stop_loss_price = None
+        self.take_profit_price = None
+        self.partial_tp_hit = False
         
         # Parse timeframe for stale candle checking
         self.tf_seconds = 900 # Default 15m
@@ -48,16 +50,35 @@ class Strategy:
         if current_pos_amt != 0:
              current_price = df['close'].iloc[-1] # Current mark/last price
              
-             # Reconstruct Stop Loss if missing (e.g. after bot restart)
-             if self.stop_loss_price is None:
-                 # Fetch ATR of the last closed candle to calculate approximate SL
+             # Reconstruct Stop Loss & Take Profit if missing (e.g. after bot restart)
+             if self.stop_loss_price is None or (PARTIAL_TP_ENABLED and self.take_profit_price is None):
+                 # Fetch ATR of the last closed candle
                  df_ha = DataProcessor.calculate_heikin_ashi(df)
                  atr_val = DataProcessor.calculate_atr(df_ha, ATR_LENGTH).iloc[-2]
-                 if current_pos_amt > 0:
-                     self.stop_loss_price = entry_price - (atr_val * ATR_MULTIPLIER)
-                 else:
-                     self.stop_loss_price = entry_price + (atr_val * ATR_MULTIPLIER)
-                 self.logger.info(f"Reconstructed SOFTWARE STOP LOSS at {self.stop_loss_price:.2f} (Entry: {entry_price:.2f})")
+                 
+                 if self.stop_loss_price is None:
+                    if current_pos_amt > 0:
+                        self.stop_loss_price = entry_price - (atr_val * ATR_MULTIPLIER)
+                    else:
+                        self.stop_loss_price = entry_price + (atr_val * ATR_MULTIPLIER)
+                    self.logger.info(f"Reconstructed SOFTWARE STOP LOSS at {self.stop_loss_price:.2f} (Entry: {entry_price:.2f})")
+                 
+                 if PARTIAL_TP_ENABLED and self.take_profit_price is None:
+                    if current_pos_amt > 0:
+                        self.take_profit_price = entry_price + (atr_val * PARTIAL_TP_MULTIPLIER)
+                    else:
+                        self.take_profit_price = entry_price - (atr_val * PARTIAL_TP_MULTIPLIER)
+                    self.logger.info(f"Reconstructed PARTIAL TAKE PROFIT at {self.take_profit_price:.2f} (Target: {self.take_profit_price:.2f})")
+
+             # --- PARTIAL TAKE PROFIT CHECK ---
+             if PARTIAL_TP_ENABLED and not self.partial_tp_hit:
+                 is_tp_hit = (current_pos_amt > 0 and current_price >= self.take_profit_price) or \
+                             (current_pos_amt < 0 and current_price <= self.take_profit_price)
+                 
+                 if is_tp_hit:
+                     self.logger.warning(f"PARTIAL TAKE PROFIT HIT at {current_price:.2f} (Target: {self.take_profit_price:.2f}).")
+                     self.partial_close_position(current_pos_amt)
+                     self.partial_tp_hit = True # Mark as hit for this position
 
              # Check for Stop Loss hit
              is_sl_hit = (current_pos_amt > 0 and current_price <= self.stop_loss_price) or \
@@ -67,6 +88,8 @@ class Strategy:
                  self.logger.warning(f"SOFTWARE STOP LOSS HIT at {current_price:.2f} (Target: {self.stop_loss_price:.2f}). Closing position.")
                  self.close_all_positions()
                  self.stop_loss_price = None
+                 self.take_profit_price = None
+                 self.partial_tp_hit = False
                  return # Skip further analysis this cycle
 
         # --- FIX: Prevent Multi-Entry and Flickering ---
@@ -184,6 +207,26 @@ class Strategy:
         # ExchangeClient.close_all_positions already handles canceling
         if self.client.close_all_positions():
             self.in_position = False
+            self.stop_loss_price = None
+            self.take_profit_price = None
+            self.partial_tp_hit = False
+
+    def partial_close_position(self, current_amt):
+        from config import PARTIAL_TP_PERCENT
+        try:
+            # Calculate amount to close
+            close_amount = abs(current_amt) * PARTIAL_TP_PERCENT
+            side = 'sell' if current_amt > 0 else 'buy'
+            
+            self.logger.info(f"Executing PARTIAL CLOSE of {close_amount:.4f} BTC ({PARTIAL_TP_PERCENT*100}% of current position)")
+            order_resp = self.client.create_order(side, close_amount)
+            
+            if order_resp:
+                self.logger.info("Partial close order placed successfully.")
+            else:
+                self.logger.error("Partial close order failed.")
+        except Exception as e:
+            self.logger.error(f"Error during partial close: {e}")
 
     def open_position(self, side, price, atr_val):
         from config import POSITION_SIZE_PERCENT, LEVERAGE, ATR_MULTIPLIER
@@ -207,13 +250,15 @@ class Strategy:
             
             self.logger.info(f"Opening {side} position at {price} (Size: {POSITION_SIZE_PERCENT*100}% of Balance: {balance} USDT, Leverage: {LEVERAGE}x -> {trade_amount:.4f} BTC)")
             
-            # --- CALCULATE ATR-BASED STOP LOSS ---
             if side == 'LONG':
                  self.stop_loss_price = price - (atr_val * ATR_MULTIPLIER)
+                 self.take_profit_price = price + (atr_val * PARTIAL_TP_MULTIPLIER)
             else:
                  self.stop_loss_price = price + (atr_val * ATR_MULTIPLIER)
+                 self.take_profit_price = price - (atr_val * PARTIAL_TP_MULTIPLIER)
             
-            self.logger.info(f"Setting SOFTWARE STOP LOSS at {self.stop_loss_price:.2f} (ATR: {atr_val:.2f} x {ATR_MULTIPLIER})")
+            self.partial_tp_hit = False
+            self.logger.info(f"Setting SOFTWARE SL: {self.stop_loss_price:.2f}, PARTIAL TP: {self.take_profit_price:.2f} (ATR: {atr_val:.2f})")
             # -------------------------------------
 
             # Open Market Order (Long or Short)

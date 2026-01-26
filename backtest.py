@@ -1,7 +1,7 @@
 import pandas as pd
 from bot.exchange_client import ExchangeClient
 from bot.data_processor import DataProcessor
-from config import SYMBOL, TIMEFRAME, SUPERTREND_LENGTH, SUPERTREND_FACTOR, EMA_LENGTH, POSITION_SIZE_PERCENT, LEVERAGE, ADX_LENGTH, ADX_THRESHOLD, ATR_LENGTH, ATR_MULTIPLIER
+from config import SYMBOL, TIMEFRAME, SUPERTREND_LENGTH, SUPERTREND_FACTOR, EMA_LENGTH, POSITION_SIZE_PERCENT, LEVERAGE, ADX_LENGTH, ADX_THRESHOLD, ATR_LENGTH, ATR_MULTIPLIER, PARTIAL_TP_ENABLED, PARTIAL_TP_MULTIPLIER, PARTIAL_TP_PERCENT
 import os
 import time
 from datetime import datetime, date, timedelta
@@ -12,6 +12,8 @@ def simulate(df, use_ema_filter=True):
     position_amt = 0 
     entry_price = 0
     stop_loss_price = 0
+    partial_tp_hit = False
+    take_profit_price = 0
     trades = []
     # Fee: 0.05% for Taker (Market Orders)
     commission_rate = 0.0005
@@ -57,6 +59,22 @@ def simulate(df, use_ema_filter=True):
             balance += pnl
             trades.append({'time': execution_time, 'type': 'CLOSE_SHORT', 'price': price, 'pnl': pnl})
             position_amt = 0
+
+        # 1a. PARTIAL TAKE PROFIT CHECK
+        if PARTIAL_TP_ENABLED and position_amt != 0 and not partial_tp_hit:
+            is_tp_hit = (position_amt > 0 and price >= take_profit_price) or (position_amt < 0 and price <= take_profit_price)
+            if is_tp_hit:
+                # Close a percentage of current position
+                close_amt = position_amt * PARTIAL_TP_PERCENT
+                raw_pnl = (take_profit_price - entry_price) * close_amt if position_amt > 0 else (entry_price - take_profit_price) * abs(close_amt)
+                fee = (take_profit_price * abs(close_amt)) * commission_rate
+                pnl = raw_pnl - fee
+                balance += pnl
+                
+                # Update remaining position
+                position_amt -= close_amt
+                partial_tp_hit = True
+                trades.append({'time': execution_time, 'type': 'PARTIAL_TP', 'price': take_profit_price, 'pnl': pnl})
 
         # 1b. ATR-BASED STOP LOSS CHECK
         if position_amt > 0 and price <= stop_loss_price:
@@ -105,8 +123,12 @@ def simulate(df, use_ema_filter=True):
             atr_val = current_candle['ATR']
             if signal == 'LONG':
                 stop_loss_price = entry_price - (atr_val * ATR_MULTIPLIER)
+                take_profit_price = entry_price + (atr_val * PARTIAL_TP_MULTIPLIER)
             else:
                 stop_loss_price = entry_price + (atr_val * ATR_MULTIPLIER)
+                take_profit_price = entry_price - (atr_val * PARTIAL_TP_MULTIPLIER)
+            
+            partial_tp_hit = False
             
             # Record entry just for tracking
             trades.append({'time': execution_time, 'type': f'OPEN_{signal}', 'price': price, 'pnl': -entry_fee, 'amount': amount, 'sl': stop_loss_price})
@@ -122,7 +144,7 @@ def simulate(df, use_ema_filter=True):
 
     # Stats calculation
     # Count only closed trades for win rate
-    closed_trades = [t for t in trades if 'CLOSE' in t['type'] or 'STOP_LOSS' in t['type']]
+    closed_trades = [t for t in trades if any(x in t['type'] for x in ['CLOSE', 'STOP_LOSS', 'PARTIAL_TP'])]
     total_trades_count = len(closed_trades)
     
     # Win = PnL > 0 (Fee is already included in PnL)
@@ -153,7 +175,8 @@ def simulate(df, use_ema_filter=True):
 
 def run_backtest():
     print(f"--- Backtest for {SYMBOL} ({TIMEFRAME}) ---")
-    print(f"Strategy: EMA {EMA_LENGTH}, SuperTrend {SUPERTREND_LENGTH}/{SUPERTREND_FACTOR}, ADX > {ADX_THRESHOLD}, SL: {ATR_MULTIPLIER}xATR")
+    tp_status = f"TP: {PARTIAL_TP_MULTIPLIER}xATR ({PARTIAL_TP_PERCENT*100}%)" if PARTIAL_TP_ENABLED else "TP: Disabled"
+    print(f"Strategy: EMA {EMA_LENGTH}, SuperTrend {SUPERTREND_LENGTH}/{SUPERTREND_FACTOR}, ADX > {ADX_THRESHOLD}, SL: {ATR_MULTIPLIER}xATR, {tp_status}")
     
     symbol_clean = SYMBOL.replace("/", "_").replace("\\", "_")
     cache_file = f"backtest_data_{symbol_clean}_{TIMEFRAME}.csv"
