@@ -31,6 +31,14 @@ def simulate(df, use_ema_filter=True):
         price = current_candle['close']
         timestamp = current_candle['timestamp']
         
+        # Calculate execution time (next candle open = current candle close + 1 timeframe)
+        # For 15m timeframe, add 15 minutes
+        if i < len(df) - 1:
+            execution_time = df.iloc[i+1]['timestamp']
+        else:
+            # For last candle, estimate by adding timeframe duration
+            execution_time = timestamp + pd.Timedelta(minutes=15)
+        
         # 1. EXIT LOGIC
         pnl = 0
         fee = 0
@@ -39,7 +47,7 @@ def simulate(df, use_ema_filter=True):
             fee = (price * abs(position_amt)) * commission_rate
             pnl = raw_pnl - fee
             balance += pnl
-            trades.append({'time': timestamp, 'type': 'CLOSE_LONG', 'price': price, 'pnl': pnl})
+            trades.append({'time': execution_time, 'type': 'CLOSE_LONG', 'price': price, 'pnl': pnl})
             position_amt = 0
             
         elif position_amt < 0 and curr_trend == 1:
@@ -47,7 +55,7 @@ def simulate(df, use_ema_filter=True):
             fee = (price * abs(position_amt)) * commission_rate
             pnl = raw_pnl - fee
             balance += pnl
-            trades.append({'time': timestamp, 'type': 'CLOSE_SHORT', 'price': price, 'pnl': pnl})
+            trades.append({'time': execution_time, 'type': 'CLOSE_SHORT', 'price': price, 'pnl': pnl})
             position_amt = 0
 
         # 1b. ATR-BASED STOP LOSS CHECK
@@ -56,14 +64,14 @@ def simulate(df, use_ema_filter=True):
             fee = (stop_loss_price * abs(position_amt)) * commission_rate
             pnl = raw_pnl - fee
             balance += pnl
-            trades.append({'time': timestamp, 'type': 'STOP_LOSS_LONG', 'price': stop_loss_price, 'pnl': pnl})
+            trades.append({'time': execution_time, 'type': 'STOP_LOSS_LONG', 'price': stop_loss_price, 'pnl': pnl})
             position_amt = 0
         elif position_amt < 0 and price >= stop_loss_price:
             raw_pnl = (entry_price - stop_loss_price) * abs(position_amt)
             fee = (stop_loss_price * abs(position_amt)) * commission_rate
             pnl = raw_pnl - fee
             balance += pnl
-            trades.append({'time': timestamp, 'type': 'STOP_LOSS_SHORT', 'price': stop_loss_price, 'pnl': pnl})
+            trades.append({'time': execution_time, 'type': 'STOP_LOSS_SHORT', 'price': stop_loss_price, 'pnl': pnl})
             position_amt = 0
 
         # 2. ENTRY LOGIC
@@ -101,7 +109,7 @@ def simulate(df, use_ema_filter=True):
                 stop_loss_price = entry_price + (atr_val * ATR_MULTIPLIER)
             
             # Record entry just for tracking
-            trades.append({'time': timestamp, 'type': f'OPEN_{signal}', 'price': price, 'pnl': -entry_fee, 'amount': amount, 'sl': stop_loss_price})
+            trades.append({'time': execution_time, 'type': f'OPEN_{signal}', 'price': price, 'pnl': -entry_fee, 'amount': amount, 'sl': stop_loss_price})
 
     # Close final position
     if position_amt != 0:
@@ -222,7 +230,7 @@ def run_backtest():
             pnl_label = "Fee" if 'OPEN' in type_str else "PnL"
             log_msg += f", {pnl_label}: {pnl:>8.2f} USDT"
             
-        print(log_msg)
+        print(log_msg, flush=True)
     print(f"\nFinal Balance: {res['final_balance']:.2f} USDT")
     print(f"Total PnL: {res['pnl_pct']:.2f}%")
     print(f"Win Rate: {res['win_rate']:.1f}% ({res['total_trades']} trades)")
