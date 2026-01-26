@@ -1,3 +1,4 @@
+# Binance Trading Bot - v1.4.0
 import time
 import schedule
 from bot.exchange_client import ExchangeClient

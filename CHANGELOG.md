@@ -1,6 +1,12 @@
 # Changelog
-
-All notable changes to this project will be documented in this file.
+ 
+ All notable changes to this project will be documented in this file.
+ 
+## [1.4.0] - 2026-01-26
+### Added
+- **Synchronized Timestamp Logic:** Backtest now accurately logs trade execution at the start of the next candle (Open), perfectly mirroring live bot behavior where signals are processed after candle close.
+- **Live Data Backtesting:** Enhanced `backtest.py` to always fetch historical data from the **Live Binance API** (`fapi.binance.com`), ensuring strategies are validated against real market conditions even when the bot is in Testnet mode.
+- **Parity Verification:** Successfully completed a 1:1 logic comparison between the live strategy engine and the backtest simulator.
 
 ## [1.3.0] - 2026-01-26
 ### Added

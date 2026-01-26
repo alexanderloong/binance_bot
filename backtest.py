@@ -188,12 +188,38 @@ def run_backtest():
             print(f"Cache is stale (Age: {int(file_age)}s >= {tf_seconds}s interval). Fetching new data...")
     
     if should_fetch:
-        print(f"Fetching fresh historical data from exchange...")
-        client = ExchangeClient()
-        df = client.fetch_history(limit=1000)
-        if df is not None and not df.empty:
-            df.to_csv(cache_file, index=False)
-            print(f"Data saved to {cache_file}")
+        print(f"Fetching fresh historical data from LIVE Binance (for accurate backtest)...")
+        
+        # Create a dedicated client for backtest that ALWAYS uses live data
+        from binance.um_futures import UMFutures
+        import pandas as pd
+        
+        try:
+            # Use live Binance API (not testnet) for accurate historical data
+            live_client = UMFutures(base_url="https://fapi.binance.com")
+            
+            symbol_clean = SYMBOL.replace("/", "").upper()
+            bars = live_client.klines(symbol_clean, interval=TIMEFRAME, limit=1000)
+            
+            df = pd.DataFrame(bars, columns=[
+                'timestamp', 'open', 'high', 'low', 'close', 'volume', 
+                'close_time', 'quote_asset_volume', 'number_of_trades', 
+                'taker_buy_base_asset_volume', 'taker_buy_quote_asset_volume', 'ignore'
+            ])
+            
+            # Convert to numeric
+            for col in ['open', 'high', 'low', 'close', 'volume']:
+                df[col] = pd.to_numeric(df[col])
+                
+            df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms').dt.tz_localize('UTC').dt.tz_convert('Asia/Ho_Chi_Minh')
+            df = df[['timestamp', 'open', 'high', 'low', 'close', 'volume']]
+            
+            if df is not None and not df.empty:
+                df.to_csv(cache_file, index=False)
+                print(f"✅ Live data saved to {cache_file}")
+        except Exception as e:
+            print(f"❌ Error fetching live data: {e}")
+            df = None
     
     if df is None or df.empty:
         print("No data available.")
