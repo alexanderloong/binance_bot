@@ -28,9 +28,10 @@ class ExchangeClient:
         # Prepare symbol
         self.symbol = SYMBOL.replace("/", "").upper()
         
-        # Time synchronization offset
-        self.time_offset = 0
-        self.sync_time()
+        # Symbol information (precision)
+        self.qty_precision = 3 # Default for BTCUSDT safety
+        self.price_precision = 2
+        self.get_symbol_info()
         
         # Verify connection
         try:
@@ -74,6 +75,20 @@ class ExchangeClient:
         except Exception as e:
             self.logger.error(f"Failed to sync time with Binance: {e}")
 
+    def get_symbol_info(self):
+        """Fetches quantity and price precision for the current symbol."""
+        try:
+            info = self.client.exchange_info()
+            for s in info['symbols']:
+                if s['symbol'] == self.symbol:
+                    self.qty_precision = int(s['quantityPrecision'])
+                    self.price_precision = int(s['pricePrecision'])
+                    self.logger.info(f"Symbol Info for {self.symbol}: Qty Precision: {self.qty_precision}, Price Precision: {self.price_precision}")
+                    return
+            self.logger.warning(f"Could not find symbol info for {self.symbol}. Using defaults (Qty: {self.qty_precision}, Price: {self.price_precision})")
+        except Exception as e:
+            self.logger.error(f"Error fetching symbol info: {e}")
+
     def fetch_ohlcv(self, limit=100):
         try:
             try:
@@ -112,7 +127,7 @@ class ExchangeClient:
                     symbol=self.symbol,
                     side=side,
                     type='MARKET',
-                    quantity=round(amount, 4),
+                    quantity=round(amount, self.qty_precision),
                     recvWindow=10000
                 )
             except Exception as e:
@@ -123,7 +138,7 @@ class ExchangeClient:
                         symbol=self.symbol,
                         side=side,
                         type='MARKET',
-                        quantity=round(amount, 4),
+                        quantity=round(amount, self.qty_precision),
                         recvWindow=10000
                     )
                 else:
@@ -206,7 +221,7 @@ class ExchangeClient:
                             symbol=self.symbol,
                             side=side,
                             type='MARKET',
-                            quantity=abs(amt),
+                            quantity=round(abs(amt), self.qty_precision),
                             recvWindow=10000
                         )
                         self.logger.info(f"Closed position for {self.symbol}. Amount: {amt} - Order ID: {order.get('orderId')}")
