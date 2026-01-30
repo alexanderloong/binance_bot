@@ -14,17 +14,17 @@ SUPERTREND_LENGTH = 15
 SUPERTREND_FACTOR = 1.5       # Higher factor = more stable trend
 EMA_LENGTH = 99              # Stronger trend filter
 LEVERAGE = 9                 # Optimal leverage for BTC
-POSITION_SIZE_PERCENT = 0.27   # Use 30% of balance per position (Balanced Risk/Reward)
+POSITION_SIZE_PERCENT = 0.25   # Use 30% of balance per position (Balanced Risk/Reward)
 MAX_TRADES_PER_HOUR = 5       # Safety: Limit trades per hour to prevent API spam
 ADX_LENGTH = 14               # Standard ADX length
-ADX_THRESHOLD = 22         # Trend strength threshold (common: 20 or 25)
+ADX_THRESHOLD = 19         # Trend strength threshold (common: 20 or 25)
 ATR_LENGTH = 14               # Standard ATR length
-ATR_MULTIPLIER = 1.5          # ATR multiplier for Stop Loss (Proposed: 1.5 - 2.0)
+ATR_MULTIPLIER = 0.9          # ATR multiplier for Stop Loss (Proposed: 1.5 - 2.0)
 
 # Partial Take Profit Settings
 PARTIAL_TP_ENABLED = True
-PARTIAL_TP_MULTIPLIER = 2.0   # Take profit at 2.0x ATR
-PARTIAL_TP_PERCENT = 0.3      # Close 50% of position
+PARTIAL_TP_MULTIPLIER = 5.0   # Take profit at 2.0x ATR
+PARTIAL_TP_PERCENT = 0.1      # Close 50% of position
 
 
 # Protection Settings

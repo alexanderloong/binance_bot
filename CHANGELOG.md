@@ -2,6 +2,14 @@
  
  All notable changes to this project will be documented in this file.
  
+## [1.6.0] - 2026-01-30
+### Added
+- **Global Strategy Optimization:** Performed a comprehensive grid search optimization for all core parameters.
+- **Improved Trend Detection:** Optimized `ADX_THRESHOLD` to 19, enabling the bot to capture trends earlier with a 1.2 Profit Factor.
+- **Refined Risk Management:** Updated `ATR_MULTIPLIER` to 0.9 (Tight Sleep) and `PARTIAL_TP_MULTIPLIER` to 5.0 for maximum profit retention.
+- **Enhanced Reward/Risk:** Adjusted `PARTIAL_TP_PERCENT` to 10%, letting 90% of the position run for major trend gains.
+- **Multiprocessing Backtest:** Created high-performance optimization scripts using `ProcessPoolExecutor`.
+
 ## [1.5.0] - 2026-01-27
 ### Added
 - **Partial Take Profit (ATR-based):** Implemented a sophisticated partial exit strategy. Bot now automatically closes a configurable percentage (default: 30%) of the position when the price reaches a target (default: 2.0x ATR), while letting the remaining position ride the trend for maximum gains.

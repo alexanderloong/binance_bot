@@ -4,9 +4,12 @@ from bot.data_processor import DataProcessor
 from config import SYMBOL, TIMEFRAME, SUPERTREND_LENGTH, SUPERTREND_FACTOR, EMA_LENGTH, POSITION_SIZE_PERCENT, LEVERAGE, ADX_LENGTH, ADX_THRESHOLD, ATR_LENGTH, ATR_MULTIPLIER, PARTIAL_TP_ENABLED, PARTIAL_TP_MULTIPLIER, PARTIAL_TP_PERCENT
 import os
 import time
-from datetime import datetime, date, timedelta
+from concurrent.futures import ThreadPoolExecutor
 
-def simulate(df, use_ema_filter=True):
+from datetime import datetime, date, timedelta  
+from binance.um_futures import UMFutures
+
+def simulate(df, use_ema_filter=True, tp_multiplier=PARTIAL_TP_MULTIPLIER, tp_percent=PARTIAL_TP_PERCENT, sl_multiplier=ATR_MULTIPLIER, adx_threshold=ADX_THRESHOLD):
     initial_balance = 1000
     balance = initial_balance
     position_amt = 0 
@@ -65,7 +68,7 @@ def simulate(df, use_ema_filter=True):
             is_tp_hit = (position_amt > 0 and price >= take_profit_price) or (position_amt < 0 and price <= take_profit_price)
             if is_tp_hit:
                 # Close a percentage of current position
-                close_amt = position_amt * PARTIAL_TP_PERCENT
+                close_amt = position_amt * tp_percent
                 raw_pnl = (take_profit_price - entry_price) * close_amt if position_amt > 0 else (entry_price - take_profit_price) * abs(close_amt)
                 fee = (take_profit_price * abs(close_amt)) * commission_rate
                 pnl = raw_pnl - fee
@@ -98,7 +101,7 @@ def simulate(df, use_ema_filter=True):
         
         # New: ADX Filter
         adx_val = current_candle['ADX']
-        is_trending = adx_val > ADX_THRESHOLD
+        is_trending = adx_val > adx_threshold
         
         signal = None
         if curr_trend == 1 and prev_trend == -1 and is_uptrend:
@@ -122,11 +125,11 @@ def simulate(df, use_ema_filter=True):
             # Set Dynamic Stop Loss based on ATR
             atr_val = current_candle['ATR']
             if signal == 'LONG':
-                stop_loss_price = entry_price - (atr_val * ATR_MULTIPLIER)
-                take_profit_price = entry_price + (atr_val * PARTIAL_TP_MULTIPLIER)
+                stop_loss_price = entry_price - (atr_val * sl_multiplier)
+                take_profit_price = entry_price + (atr_val * tp_multiplier)
             else:
-                stop_loss_price = entry_price + (atr_val * ATR_MULTIPLIER)
-                take_profit_price = entry_price - (atr_val * PARTIAL_TP_MULTIPLIER)
+                stop_loss_price = entry_price + (atr_val * sl_multiplier)
+                take_profit_price = entry_price - (atr_val * tp_multiplier)
             
             partial_tp_hit = False
             
@@ -165,19 +168,22 @@ def simulate(df, use_ema_filter=True):
             drawdown = (peak - curr_equity) / peak
             mdd = max(mdd, drawdown)
 
+    # Profit Factor
+    all_pnls = [t['pnl'] for t in trades if 'pnl' in t]
+    gross_profit = sum(p for p in all_pnls if p > 0)
+    gross_loss = abs(sum(p for p in all_pnls if p < 0))
+    profit_factor = (gross_profit / gross_loss) if gross_loss > 0 else (float('inf') if gross_profit > 0 else 0)
+
     return {
         'final_balance': balance,
         'pnl_pct': pnl_pct,
         'total_trades': total_trades_count,
         'win_rate': win_rate,
-        'max_drawdown': mdd * 100
+        'max_drawdown': mdd * 100,
+        'profit_factor': profit_factor
     }, trades
 
-def run_backtest():
-    print(f"--- Backtest for {SYMBOL} ({TIMEFRAME}) ---")
-    tp_status = f"TP: {PARTIAL_TP_MULTIPLIER}xATR ({PARTIAL_TP_PERCENT*100}%)" if PARTIAL_TP_ENABLED else "TP: Disabled"
-    print(f"Strategy: EMA {EMA_LENGTH}, SuperTrend {SUPERTREND_LENGTH}/{SUPERTREND_FACTOR}, ADX > {ADX_THRESHOLD}, SL: {ATR_MULTIPLIER}xATR, {tp_status}")
-    
+def get_backtest_data():
     symbol_clean = SYMBOL.replace("/", "_").replace("\\", "_")
     cache_file = f"backtest_data_{symbol_clean}_{TIMEFRAME}.csv"
     df = None
@@ -198,32 +204,70 @@ def run_backtest():
     if os.path.exists(cache_file):
         file_mtime = os.path.getmtime(cache_file)
         file_age = time.time() - file_mtime
+        
+        # Log cache status
+        print(f"Checking cache: {cache_file}")
+        print(f"  - File age: {int(file_age)}s")
+        print(f"  - Expiry threshold: {tf_seconds}s")
+
         if file_age < tf_seconds:
             remaining = tf_seconds - file_age
-            print(f"Loading data from local cache... (Age: {int(file_age)}s, Next refresh in: {int(remaining)}s)")
+            print(f"✅ Cache is valid. Loading... (Expires in: {int(remaining)}s)")
             try:
                 df = pd.read_csv(cache_file)
-                df['timestamp'] = pd.to_datetime(df['timestamp'])
-                should_fetch = False
-            except:
-                pass
+                if not df.empty:
+                    df['timestamp'] = pd.to_datetime(df['timestamp'])
+                    should_fetch = False
+                    print(f"✅ Successfully loaded {len(df)} candles from cache.")
+                else:
+                    print("⚠️ Cache file is empty. Will fetch fresh data.")
+            except Exception as e:
+                print(f"⚠️ Error loading cache file: {e}. Will fetch fresh data.")
         else:
-            print(f"Cache is stale (Age: {int(file_age)}s >= {tf_seconds}s interval). Fetching new data...")
+            print(f"🔄 Cache is stale (Age: {int(file_age)}s >= {tf_seconds}s threshold). Fetching fresh data...")
     
     if should_fetch:
-        print(f"Fetching fresh historical data from LIVE Binance (for accurate backtest)...")
-        
-        # Create a dedicated client for backtest that ALWAYS uses live data
-        from binance.um_futures import UMFutures
-        import pandas as pd
+        print(f"Fetching {35000} historical candles from LIVE Binance (multi-threaded)...")
         
         try:
-            # Use live Binance API (not testnet) for accurate historical data
             live_client = UMFutures(base_url="https://fapi.binance.com")
-            
             symbol_clean = SYMBOL.replace("/", "").upper()
-            bars = live_client.klines(symbol_clean, interval=TIMEFRAME, limit=1000)
             
+            # Multi-threaded fetcher
+            def fetch_batch(end_ts):
+                try:
+                    return live_client.klines(symbol_clean, interval=TIMEFRAME, limit=1000, endTime=end_ts)
+                except Exception as e:
+                    print(f"Error fetching batch at {end_ts}: {e}")
+                    return []
+
+            # Calculate time intervals for 35,000 candles
+            val = int(''.join(c for c in TIMEFRAME if c.isdigit()))
+            unit = ''.join(c for c in TIMEFRAME if c.isalpha()).lower()
+            ms_unit = 60 * 1000 if unit == 'm' else (3600 * 1000 if unit == 'h' else 86400 * 1000)
+            ms_interval = val * ms_unit
+            
+            now_ms = int(time.time() * 1000)
+            # We need 35 batches of 1000
+            end_times = [now_ms - (i * 1000 * ms_interval) for i in range(35)]
+            
+            all_bars = []
+            with ThreadPoolExecutor(max_workers=10) as executor:
+                results = list(executor.map(fetch_batch, end_times))
+            
+            for batch in results:
+                all_bars.extend(batch)
+            
+            # Sort and remove duplicates
+            unique_bars = {b[0]: b for b in all_bars}
+            sorted_ts = sorted(unique_bars.keys())
+            bars = [unique_bars[ts] for ts in sorted_ts]
+            
+            # Filter to requested length if needed
+            bars = bars[-35000:]
+            
+            print(f"Successfully fetched {len(bars)} candles.")
+
             df = pd.DataFrame(bars, columns=[
                 'timestamp', 'open', 'high', 'low', 'close', 'volume', 
                 'close_time', 'quote_asset_volume', 'number_of_trades', 
@@ -243,10 +287,16 @@ def run_backtest():
         except Exception as e:
             print(f"❌ Error fetching live data: {e}")
             df = None
+            
+    return df
+
+def run_backtest():
+    print(f"--- Backtest for {SYMBOL} ({TIMEFRAME}) ---")
+    tp_status = f"TP: {PARTIAL_TP_MULTIPLIER}xATR ({PARTIAL_TP_PERCENT*100}%)" if PARTIAL_TP_ENABLED else "TP: Disabled"
+    print(f"Strategy: EMA {EMA_LENGTH}, SuperTrend {SUPERTREND_LENGTH}/{SUPERTREND_FACTOR}, ADX > {ADX_THRESHOLD}, SL: {ATR_MULTIPLIER}xATR, {tp_status}")
     
-    if df is None or df.empty:
-        print("No data available.")
-        return
+    df = get_backtest_data()
+    if df is None: return
 
     print(f"Processing {len(df)} candles...")
     df_ha = DataProcessor.calculate_heikin_ashi(df)
@@ -283,6 +333,7 @@ def run_backtest():
     print(f"\nFinal Balance: {res['final_balance']:.2f} USDT")
     print(f"Total PnL: {res['pnl_pct']:.2f}%")
     print(f"Win Rate: {res['win_rate']:.1f}% ({res['total_trades']} trades)")
+    print(f"Profit Factor: {res['profit_factor']:.2f}")
     print(f"Max Drawdown: {res['max_drawdown']:.2f}%")
 
 if __name__ == "__main__":
