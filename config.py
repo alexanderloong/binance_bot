@@ -1,7 +1,9 @@
 import os
 from dotenv import load_dotenv
 
-load_dotenv()
+# Load .env from resource folder
+env_path = os.path.join(os.path.dirname(__file__), 'resource', '.env')
+load_dotenv(env_path)
 
 API_KEY = os.getenv("API_KEY")
 SECRET = os.getenv("SECRET")

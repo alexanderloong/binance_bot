@@ -15,6 +15,8 @@ A robust, automated cryptocurrency trading bot for Binance Futures, built with P
 *   **Resilient**: Handles API connection errors and gracefully manages Binance Testnet quirks.
 *   **Testnet Support**: Safely test strategies on Binance Testnet before going live.
 
+![Performance Summary](resource/performance_summary.png)
+
 ---
 
 ## 📈 Trading Strategy
@@ -59,11 +61,11 @@ The execution logic is split into hai independent steps: **Exit (Priority)** and
 
 2.  **Install dependencies**:
     ```bash
-    pip install -r requirements.txt
+    pip install -r resource/requirements.txt
     ```
 
 3.  **Configuration**:
-    *   Create a `.env` file in the root directory:
+    *   Create a `.env` file in the `resource` directory:
         ```env
         API_KEY=your_binance_api_key
         SECRET=your_binance_secret_key

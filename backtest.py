@@ -188,7 +188,12 @@ def simulate(df, use_ema_filter=True, tp_multiplier=PARTIAL_TP_MULTIPLIER, tp_pe
 
 def get_backtest_data():
     symbol_clean = SYMBOL.replace("/", "_").replace("\\", "_")
-    cache_file = f"backtest_data_{symbol_clean}_{TIMEFRAME}.csv"
+    
+    # Store data in resource folder
+    cache_dir = "resource"
+    if not os.path.exists(cache_dir): os.makedirs(cache_dir)
+    cache_file = os.path.join(cache_dir, f"backtest_data_{symbol_clean}_{TIMEFRAME}.csv")
+    
     df = None
     
     # Calculate timeframe in seconds for cache expiry
@@ -327,6 +332,14 @@ def run_backtest():
     print(f"Win Rate: {res['win_rate']:.1f}% ({res['total_trades']} trades)")
     print(f"Profit Factor: {res['profit_factor']:.2f}")
     print(f"Max Drawdown: {res['max_drawdown']:.2f}%")
+    
+    # Generate Performance Summary Plot
+    try:
+        from optimize.plot_results import plot_performance
+        print("\n📊 Generating Performance Chart...")
+        plot_performance()
+    except Exception as e:
+        print(f"⚠️ Could not generate chart: {e}")
 
 if __name__ == "__main__":
     run_backtest()
