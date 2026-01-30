@@ -2,6 +2,12 @@
  
  All notable changes to this project will be documented in this file.
  
+## [1.6.1] - 2026-01-30
+### Refactored
+- **Code Optimization:** Cleaned up unused imports and centralized shared utility functions (e.g., `parse_timeframe_to_seconds`) in `bot/utils.py`.
+- **Improved Maintainability:** Refactored `backtest.py` and `strategy.py` to reduce code duplication and improve import structure.
+- **Documentation:** Updated docstrings and code comments for better readability.
+
 ## [1.6.0] - 2026-01-30
 ### Added
 - **Global Strategy Optimization:** Performed a comprehensive grid search optimization for all core parameters.

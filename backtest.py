@@ -1,13 +1,16 @@
-import pandas as pd
-from bot.exchange_client import ExchangeClient
-from bot.data_processor import DataProcessor
-from config import SYMBOL, TIMEFRAME, SUPERTREND_LENGTH, SUPERTREND_FACTOR, EMA_LENGTH, POSITION_SIZE_PERCENT, LEVERAGE, ADX_LENGTH, ADX_THRESHOLD, ATR_LENGTH, ATR_MULTIPLIER, PARTIAL_TP_ENABLED, PARTIAL_TP_MULTIPLIER, PARTIAL_TP_PERCENT
 import os
 import time
 from concurrent.futures import ThreadPoolExecutor
-
-from datetime import datetime, date, timedelta  
+import pandas as pd
 from binance.um_futures import UMFutures
+from bot.data_processor import DataProcessor
+from bot.utils import parse_timeframe_to_seconds
+from config import (
+    SYMBOL, TIMEFRAME, SUPERTREND_LENGTH, SUPERTREND_FACTOR, EMA_LENGTH,
+    POSITION_SIZE_PERCENT, LEVERAGE, ADX_LENGTH, ADX_THRESHOLD, 
+    ATR_LENGTH, ATR_MULTIPLIER, PARTIAL_TP_ENABLED, 
+    PARTIAL_TP_MULTIPLIER, PARTIAL_TP_PERCENT
+)
 
 def simulate(df, use_ema_filter=True, tp_multiplier=PARTIAL_TP_MULTIPLIER, tp_percent=PARTIAL_TP_PERCENT, sl_multiplier=ATR_MULTIPLIER, adx_threshold=ADX_THRESHOLD):
     initial_balance = 1000
@@ -37,12 +40,12 @@ def simulate(df, use_ema_filter=True, tp_multiplier=PARTIAL_TP_MULTIPLIER, tp_pe
         timestamp = current_candle['timestamp']
         
         # Calculate execution time (next candle open = current candle close + 1 timeframe)
-        # For 15m timeframe, add 15 minutes
         if i < len(df) - 1:
             execution_time = df.iloc[i+1]['timestamp']
         else:
             # For last candle, estimate by adding timeframe duration
-            execution_time = timestamp + pd.Timedelta(minutes=15)
+            tf_seconds = parse_timeframe_to_seconds(TIMEFRAME)
+            execution_time = timestamp + pd.Timedelta(seconds=tf_seconds)
         
         # 1. EXIT LOGIC
         pnl = 0
@@ -189,16 +192,7 @@ def get_backtest_data():
     df = None
     
     # Calculate timeframe in seconds for cache expiry
-    tf_seconds = 900 # Default 15m
-    try:
-        val = int(''.join(c for c in TIMEFRAME if c.isdigit()))
-        unit = ''.join(c for c in TIMEFRAME if c.isalpha()).lower()
-        if unit == 'm': tf_seconds = val * 60
-        elif unit == 'h': tf_seconds = val * 3600
-        elif unit == 'd': tf_seconds = val * 86400
-        else: tf_seconds = val * 60
-    except:
-        pass
+    tf_seconds = parse_timeframe_to_seconds(TIMEFRAME)
 
     should_fetch = True
     if os.path.exists(cache_file):
@@ -242,10 +236,8 @@ def get_backtest_data():
                     return []
 
             # Calculate time intervals for 35,000 candles
-            val = int(''.join(c for c in TIMEFRAME if c.isdigit()))
-            unit = ''.join(c for c in TIMEFRAME if c.isalpha()).lower()
-            ms_unit = 60 * 1000 if unit == 'm' else (3600 * 1000 if unit == 'h' else 86400 * 1000)
-            ms_interval = val * ms_unit
+            tf_seconds = parse_timeframe_to_seconds(TIMEFRAME)
+            ms_interval = tf_seconds * 1000
             
             now_ms = int(time.time() * 1000)
             # We need 35 batches of 1000

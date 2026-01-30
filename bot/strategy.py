@@ -1,7 +1,14 @@
-from .data_processor import DataProcessor
-from config import SUPERTREND_LENGTH, SUPERTREND_FACTOR, EMA_LENGTH, TIMEFRAME, ADX_LENGTH, ADX_THRESHOLD, ATR_LENGTH, ATR_MULTIPLIER, PARTIAL_TP_ENABLED, PARTIAL_TP_MULTIPLIER, PARTIAL_TP_PERCENT
+import time
 from datetime import datetime, timedelta
 import pytz
+from config import (
+    SUPERTREND_LENGTH, SUPERTREND_FACTOR, EMA_LENGTH, TIMEFRAME, 
+    ADX_LENGTH, ADX_THRESHOLD, ATR_LENGTH, ATR_MULTIPLIER, 
+    PARTIAL_TP_ENABLED, PARTIAL_TP_MULTIPLIER, PARTIAL_TP_PERCENT,
+    MAX_TRADES_PER_HOUR, POSITION_SIZE_PERCENT, LEVERAGE
+)
+from .data_processor import DataProcessor
+from .utils import parse_timeframe_to_seconds
 
 class Strategy:
     def __init__(self, exchange_client, logger):
@@ -15,19 +22,10 @@ class Strategy:
         self.partial_tp_hit = False
         
         # Parse timeframe for stale candle checking
-        self.tf_seconds = 900 # Default 15m
-        try:
-            val = int(''.join(c for c in TIMEFRAME if c.isdigit()))
-            unit = ''.join(c for c in TIMEFRAME if c.isalpha()).lower()
-            if unit == 'm': self.tf_seconds = val * 60
-            elif unit == 'h': self.tf_seconds = val * 3600
-            elif unit == 'd': self.tf_seconds = val * 86400
-        except:
-            pass
+        # Parse timeframe for stale candle checking
+        self.tf_seconds = parse_timeframe_to_seconds(TIMEFRAME)
 
     def check_rate_limit(self):
-        from config import MAX_TRADES_PER_HOUR
-        import time
         current_time = time.time()
         # Keep only trades within last hour (3600 seconds)
         self.trade_history = [t for t in self.trade_history if current_time - t < 3600]
@@ -212,7 +210,6 @@ class Strategy:
             self.partial_tp_hit = False
 
     def partial_close_position(self, current_amt):
-        from config import PARTIAL_TP_PERCENT
         try:
             # Calculate amount to close
             close_amount = abs(current_amt) * PARTIAL_TP_PERCENT
@@ -229,8 +226,6 @@ class Strategy:
             self.logger.error(f"Error during partial close: {e}")
 
     def open_position(self, side, price, atr_val):
-        from config import POSITION_SIZE_PERCENT, LEVERAGE, ATR_MULTIPLIER
-        import time
         
         # Safety Check: Rate Limit
         if not self.check_rate_limit():

@@ -1,9 +1,8 @@
-# Binance Trading Bot - v1.6.0
+# Binance Trading Bot - v1.6.1
 import time
-import schedule
 from bot.exchange_client import ExchangeClient
 from bot.strategy import Strategy
-from bot.utils import setup_logger
+from bot.utils import setup_logger, parse_timeframe_to_seconds
 from config import SYMBOL, TIMEFRAME
 
 def main():
@@ -15,15 +14,7 @@ def main():
     
     strategy = Strategy(client, logger)
     
-    tf_seconds = 60 # Default
-    try:
-        val = int(''.join(c for c in TIMEFRAME if c.isdigit()))
-        unit = ''.join(c for c in TIMEFRAME if c.isalpha()).lower()
-        if unit == 'm': tf_seconds = val * 60
-        elif unit == 'h': tf_seconds = val * 3600
-        elif unit == 'd': tf_seconds = val * 86400
-    except:
-        logger.warning(f"Could not parse TIMEFRAME '{TIMEFRAME}', defaulting to 60s")
+    tf_seconds = parse_timeframe_to_seconds(TIMEFRAME)
 
     logger.info("Bot is running. Press Ctrl+C to stop.")
     

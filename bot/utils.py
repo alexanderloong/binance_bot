@@ -22,3 +22,14 @@ def setup_logger():
         ]
     )
     return logging.getLogger("BinanceBot")
+
+def parse_timeframe_to_seconds(tf_str):
+    try:
+        val = int(''.join(c for c in tf_str if c.isdigit()))
+        unit = ''.join(c for c in tf_str if c.isalpha()).lower()
+        if unit == 'm': return val * 60
+        elif unit == 'h': return val * 3600
+        elif unit == 'd': return val * 86400
+        else: return val * 60  # Default to minutes if weird unit
+    except:
+        return 60 # Default to 1m if parse fails
