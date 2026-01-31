@@ -10,10 +10,11 @@ from config import (
     POSITION_SIZE_PERCENT, LEVERAGE, ADX_LENGTH, ADX_THRESHOLD, 
     ATR_LENGTH, ATR_MULTIPLIER, PARTIAL_TP_ENABLED, 
     PARTIAL_TP_MULTIPLIER, PARTIAL_TP_PERCENT,
-    RSI_LENGTH, RSI_OVERBOUGHT, RSI_OVERSOLD
+    RSI_LENGTH, RSI_OVERBOUGHT, RSI_OVERSOLD,
+    VOLUME_MA_LENGTH
 )
 
-def simulate(df, use_ema_filter=True, tp_multiplier=PARTIAL_TP_MULTIPLIER, tp_percent=PARTIAL_TP_PERCENT, sl_multiplier=ATR_MULTIPLIER, adx_threshold=ADX_THRESHOLD, use_rsi_filter=True, rsi_overbought=RSI_OVERBOUGHT, rsi_oversold=RSI_OVERSOLD):
+def simulate(df, use_ema_filter=True, tp_multiplier=PARTIAL_TP_MULTIPLIER, tp_percent=PARTIAL_TP_PERCENT, sl_multiplier=ATR_MULTIPLIER, adx_threshold=ADX_THRESHOLD, use_rsi_filter=True, rsi_overbought=RSI_OVERBOUGHT, rsi_oversold=RSI_OVERSOLD, use_volume_filter=True, volume_ma_length=VOLUME_MA_LENGTH):
     initial_balance = 1000
     balance = initial_balance
     position_amt = 0 
@@ -112,12 +113,18 @@ def simulate(df, use_ema_filter=True, tp_multiplier=PARTIAL_TP_MULTIPLIER, tp_pe
         rsi_long_ok = rsi_val < rsi_overbought if use_rsi_filter else True
         rsi_short_ok = rsi_val > rsi_oversold if use_rsi_filter else True
         
+        # New: Volume MA Filter
+        vol_ma_col = f'VOL_MA_{volume_ma_length}'
+        vol_ok = True
+        if use_volume_filter and vol_ma_col in current_candle:
+            vol_ok = current_candle['volume'] > current_candle[vol_ma_col]
+        
         signal = None
         if curr_trend == 1 and prev_trend == -1 and is_uptrend:
-            if is_trending and rsi_long_ok:
+            if is_trending and rsi_long_ok and vol_ok:
                 signal = 'LONG'
         elif curr_trend == -1 and prev_trend == 1 and is_downtrend:
-            if is_trending and rsi_short_ok:
+            if is_trending and rsi_short_ok and vol_ok:
                 signal = 'SHORT'
             
         if signal and position_amt == 0:
@@ -308,11 +315,12 @@ def run_backtest():
     df_st['ADX'] = DataProcessor.calculate_adx(df, length=ADX_LENGTH)
     df_st['ATR'] = DataProcessor.calculate_atr(df, length=ATR_LENGTH)
     df_st['RSI'] = DataProcessor.calculate_rsi(df, length=RSI_LENGTH)
+    df_st = DataProcessor.calculate_volume_ma(df_st, length=VOLUME_MA_LENGTH)
     df_final = df_st
     
     # Run simulation with verbose output (we will modify simulate to return trades and we print them)
     # Or just print after simulation
-    res, trades = simulate(df_final, use_ema_filter=True, use_rsi_filter=True)
+    res, trades = simulate(df_final, use_ema_filter=True, use_rsi_filter=True, use_volume_filter=True)
     
     print("\n--- Trade History ---")
     for t in trades:

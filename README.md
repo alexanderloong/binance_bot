@@ -1,4 +1,4 @@
-# Binance SuperTrend & EMA Trading Bot 🚀 (v1.7.1)
+# Binance SuperTrend & EMA Trading Bot 🚀 (v1.8.0)
 
 A robust, automated cryptocurrency trading bot for Binance Futures, built with Python. This bot utilizes a trend-following strategy combining **SuperTrend** and **EMA 99** (default) to capture major market moves while filtering out noise.
 
@@ -30,17 +30,18 @@ The bot implements an optimized trend-following strategy designed for the **15m 
 *   **ADX (14)**: Trend Strength filter. Bot only enters when ADX > 19 (Optimized for 15m).
 *   **ATR (14)**: Measures market volatility.
 *   **RSI (14)**: Overbought/Oversold filter to avoid market extremes.
+*   **Volume MA (55)**: Liquidity filter. Trades only execute when volume > 55-period MA.
 
 ### 2. Execution Logic (Capital Protection & Profit Optimization)
 
 The execution logic is split into hai independent steps: **Exit (Priority)** and **Entry (Filtered)**.
 
-| Current State | Event (SuperTrend) | EMA Filter | ADX Filter | RSI Filter | Action | Resulting State |
-| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| **Empty** | Red $\rightarrow$ **Green** | Price > EMA 99 | **ADX > 19** | **RSI < 66** | **Open LONG** | LONG |
-| **Empty** | Green $\rightarrow$ **Red** | Price < EMA 99 | **ADX > 19** | **RSI > 35** | **Open SHORT** | SHORT |
-| **LONG** | Green $\rightarrow$ **Red** | Any | Any | Any | **Close LONG** | Empty |
-| **SHORT** | Red $\rightarrow$ **Green** | Any | Any | Any | **Close SHORT** | Empty |
+| Current State | Event (SuperTrend) | EMA Filter | ADX Filter | RSI Filter | Volume Filter | Action | Resulting State |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| **Empty** | Red $\rightarrow$ **Green** | Price > EMA 99 | **ADX > 19** | **RSI < 66** | **Vol > MA(55)** | **Open LONG** | LONG |
+| **Empty** | Green $\rightarrow$ **Red** | Price < EMA 99 | **ADX > 19** | **RSI > 35** | **Vol > MA(55)** | **Open SHORT** | SHORT |
+| **LONG** | Green $\rightarrow$ **Red** | Any | Any | Any | Any | **Close LONG** | Empty |
+| **SHORT** | Red $\rightarrow$ **Green** | Any | Any | Any | Any | **Close SHORT** | Empty |
 | **ANY** | Price hits **5.0x ATR** | Any | Any | Any | **Partial TP (10%)** | Holding (Reduced) |
 | **ANY** | Price hits **0.9x ATR SL** | Any | Any | Any | **Close All** | Empty |
 
@@ -122,6 +123,7 @@ ADX_THRESHOLD = 19
 ATR_MULTIPLIER = 0.9
 RSI_OVERBOUGHT = 66
 RSI_OVERSOLD = 35
+VOLUME_MA_LENGTH = 55
 PARTIAL_TP_ENABLED = True
 PARTIAL_TP_MULTIPLIER = 5.0
 PARTIAL_TP_PERCENT = 0.1

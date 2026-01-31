@@ -2,7 +2,7 @@ import pandas as pd
 import numpy as np
 from backtest import simulate, get_backtest_data
 from bot.data_processor import DataProcessor
-from config import EMA_LENGTH, SUPERTREND_LENGTH, SUPERTREND_FACTOR, ADX_LENGTH, ATR_LENGTH, PARTIAL_TP_MULTIPLIER, PARTIAL_TP_PERCENT, ATR_MULTIPLIER, RSI_LENGTH
+from config import EMA_LENGTH, SUPERTREND_LENGTH, SUPERTREND_FACTOR, ADX_LENGTH, ATR_LENGTH, PARTIAL_TP_MULTIPLIER, PARTIAL_TP_PERCENT, ATR_MULTIPLIER, RSI_LENGTH, VOLUME_MA_LENGTH
 from concurrent.futures import ProcessPoolExecutor, as_completed
 
 def run_simulation(adx_th, df_final):
@@ -13,7 +13,8 @@ def run_simulation(adx_th, df_final):
                       tp_percent=PARTIAL_TP_PERCENT,
                       sl_multiplier=ATR_MULTIPLIER,
                       adx_threshold=adx_th,
-                      use_rsi_filter=True)
+                      use_rsi_filter=True,
+                      use_volume_filter=True)
     return {
         'adx_threshold': round(adx_th, 2),
         'pnl_pct': res['pnl_pct'],
@@ -41,6 +42,7 @@ def run_optimization():
     df_st['ADX'] = DataProcessor.calculate_adx(df, length=ADX_LENGTH)
     df_st['ATR'] = DataProcessor.calculate_atr(df, length=ATR_LENGTH)
     df_st['RSI'] = DataProcessor.calculate_rsi(df, length=RSI_LENGTH)
+    df_st = DataProcessor.calculate_volume_ma(df_st, length=VOLUME_MA_LENGTH)
     df_final = df_st
 
     # 3. Define range for ADX Threshold

@@ -10,7 +10,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from backtest import get_backtest_data, simulate
 from bot.data_processor import DataProcessor
-from config import EMA_LENGTH, ADX_LENGTH, ATR_LENGTH, RSI_LENGTH
+from config import EMA_LENGTH, ADX_LENGTH, ATR_LENGTH, RSI_LENGTH, VOLUME_MA_LENGTH
 
 def plot_performance():
     # 1. Get Data and Run Simulation
@@ -27,9 +27,10 @@ def plot_performance():
     df_st['ADX'] = DataProcessor.calculate_adx(df, length=ADX_LENGTH)
     df_st['ATR'] = DataProcessor.calculate_atr(df, length=ATR_LENGTH)
     df_st['RSI'] = DataProcessor.calculate_rsi(df, length=RSI_LENGTH)
+    df_st = DataProcessor.calculate_volume_ma(df_st, length=VOLUME_MA_LENGTH)
     
     # Run simulation
-    res, trades = simulate(df_st, use_ema_filter=True, use_rsi_filter=True)
+    res, trades = simulate(df_st, use_ema_filter=True, use_rsi_filter=True, use_volume_filter=True)
     
     if not trades:
         print("❌ No trades executed.")

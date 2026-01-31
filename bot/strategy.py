@@ -6,7 +6,8 @@ from config import (
     ADX_LENGTH, ADX_THRESHOLD, ATR_LENGTH, ATR_MULTIPLIER, 
     PARTIAL_TP_ENABLED, PARTIAL_TP_MULTIPLIER, PARTIAL_TP_PERCENT,
     MAX_TRADES_PER_HOUR, POSITION_SIZE_PERCENT, LEVERAGE,
-    RSI_LENGTH, RSI_OVERBOUGHT, RSI_OVERSOLD
+    RSI_LENGTH, RSI_OVERBOUGHT, RSI_OVERSOLD,
+    VOLUME_MA_LENGTH
 )
 from .data_processor import DataProcessor
 from .utils import parse_timeframe_to_seconds
@@ -127,6 +128,7 @@ class Strategy:
         df_st['ADX'] = DataProcessor.calculate_adx(df, length=ADX_LENGTH)
         df_st['ATR'] = DataProcessor.calculate_atr(df, length=ATR_LENGTH)
         df_st['RSI'] = DataProcessor.calculate_rsi(df, length=RSI_LENGTH)
+        df_st = DataProcessor.calculate_volume_ma(df_st, length=VOLUME_MA_LENGTH)
         df_final = df_st
         
         # Get the last closed candle (second to last row, as last row is unfinished)
@@ -145,9 +147,11 @@ class Strategy:
         adx_val = last_candle['ADX']
         atr_val = last_candle['ATR']
         rsi_val = last_candle['RSI']
+        vol_ma_val = last_candle[f'VOL_MA_{VOLUME_MA_LENGTH}']
+        current_volume = last_candle['volume']
         candle_time = last_candle['timestamp'].strftime('%d-%m-%Y %H:%M:%S')
         
-        self.logger.info(f"Market Data: {candle_time} | Close: {close_price} | Trend: {current_trend} | EMA{EMA_LENGTH}: {ema_val:.2f} | ADX: {adx_val:.2f} | ATR: {atr_val:.2f} | RSI: {rsi_val:.2f}")
+        self.logger.info(f"Market Data: {candle_time} | Close: {close_price} | Trend: {current_trend} | EMA{EMA_LENGTH}: {ema_val:.2f} | ADX: {adx_val:.2f} | ATR: {atr_val:.2f} | RSI: {rsi_val:.2f} | Vol: {current_volume:.0f} (MA: {vol_ma_val:.0f})")
 
         # --- STALENESS CHECK (Only skip TRADE logic, not analysis logging) ---
         STALE_TOLERANCE = 120 
@@ -164,6 +168,9 @@ class Strategy:
         # Determine RSI Conditions
         rsi_long_ok = rsi_val < RSI_OVERBOUGHT
         rsi_short_ok = rsi_val > RSI_OVERSOLD
+        
+        # Determine Volume Condition
+        vol_ok = current_volume > vol_ma_val
         
         # Determine Signal based on Trend Flip + EMA Filter
         signal = None
@@ -188,17 +195,23 @@ class Strategy:
         # 2. LOGIC MỞ LỆNH (Entry Filtered)
         signal = None
         if current_trend == 1 and previous_trend == -1 and is_uptrend_long:
-            if is_trending and rsi_long_ok:
+            if is_trending and rsi_long_ok and vol_ok:
                 signal = 'LONG'
             else:
-                reason = "ADX low" if not is_trending else "RSI overbought"
-                self.logger.info(f"LONG signal detected, but {reason}. (ADX: {adx_val:.2f}, RSI: {rsi_val:.2f}). Skipping.")
+                reasons = []
+                if not is_trending: reasons.append("ADX low")
+                if not rsi_long_ok: reasons.append("RSI overbought")
+                if not vol_ok: reasons.append("Volume low")
+                self.logger.info(f"LONG signal detected, but {', '.join(reasons)}. (ADX: {adx_val:.2f}, RSI: {rsi_val:.2f}, Vol: {current_volume:.0f}). Skipping.")
         elif current_trend == -1 and previous_trend == 1 and is_downtrend_short:
-            if is_trending and rsi_short_ok:
+            if is_trending and rsi_short_ok and vol_ok:
                 signal = 'SHORT'
             else:
-                reason = "ADX low" if not is_trending else "RSI oversold"
-                self.logger.info(f"SHORT signal detected, but {reason}. (ADX: {adx_val:.2f}, RSI: {rsi_val:.2f}). Skipping.")
+                reasons = []
+                if not is_trending: reasons.append("ADX low")
+                if not rsi_short_ok: reasons.append("RSI oversold")
+                if not vol_ok: reasons.append("Volume low")
+                self.logger.info(f"SHORT signal detected, but {', '.join(reasons)}. (ADX: {adx_val:.2f}, RSI: {rsi_val:.2f}, Vol: {current_volume:.0f}). Skipping.")
             
         if signal:
             if current_pos_amt == 0:

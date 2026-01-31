@@ -28,6 +28,9 @@ RSI_LENGTH = 14
 RSI_OVERBOUGHT = 66
 RSI_OVERSOLD = 35
 
+# Volume MA Filter Settings
+VOLUME_MA_LENGTH = 55
+
 # Partial Take Profit Settings
 PARTIAL_TP_ENABLED = True
 PARTIAL_TP_MULTIPLIER = 5.0   # Take profit at 2.0x ATR

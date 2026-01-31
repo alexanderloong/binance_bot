@@ -12,7 +12,7 @@ from bot.data_processor import DataProcessor
 from config import (
     EMA_LENGTH, SUPERTREND_LENGTH, SUPERTREND_FACTOR, ADX_LENGTH, 
     ATR_LENGTH, PARTIAL_TP_MULTIPLIER, PARTIAL_TP_PERCENT, 
-    ATR_MULTIPLIER, ADX_THRESHOLD, RSI_LENGTH
+    ATR_MULTIPLIER, ADX_THRESHOLD, RSI_LENGTH, VOLUME_MA_LENGTH
 )
 
 def run_simulation(rsi_ob, rsi_os, df_final):
@@ -25,7 +25,8 @@ def run_simulation(rsi_ob, rsi_os, df_final):
                       adx_threshold=ADX_THRESHOLD,
                       use_rsi_filter=True,
                       rsi_overbought=rsi_ob,
-                      rsi_oversold=rsi_os)
+                      rsi_oversold=rsi_os,
+                      use_volume_filter=True)
     return {
         'rsi_overbought': rsi_ob,
         'rsi_oversold': rsi_os,
@@ -54,6 +55,7 @@ def run_optimization():
     df_st['ADX'] = DataProcessor.calculate_adx(df, length=ADX_LENGTH)
     df_st['ATR'] = DataProcessor.calculate_atr(df, length=ATR_LENGTH)
     df_st['RSI'] = DataProcessor.calculate_rsi(df, length=RSI_LENGTH)
+    df_st = DataProcessor.calculate_volume_ma(df_st, length=VOLUME_MA_LENGTH)
     df_final = df_st
 
     # 3. Define range for RSI Thresholds

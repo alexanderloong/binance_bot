@@ -93,6 +93,12 @@ class DataProcessor:
         return rsi
 
     @staticmethod
+    def calculate_volume_ma(df, length=20):
+        """Calculate Volume Moving Average."""
+        df[f'VOL_MA_{length}'] = df['volume'].rolling(window=length).mean()
+        return df
+
+    @staticmethod
     def calculate_supertrend(df):
         # Manual SuperTrend Implementation
         length = SUPERTREND_LENGTH
