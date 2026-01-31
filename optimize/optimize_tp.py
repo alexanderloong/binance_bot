@@ -2,12 +2,12 @@ import pandas as pd
 import numpy as np
 from backtest import simulate, get_backtest_data
 from bot.data_processor import DataProcessor
-from config import EMA_LENGTH, SUPERTREND_LENGTH, SUPERTREND_FACTOR, ADX_LENGTH, ATR_LENGTH
+from config import EMA_LENGTH, SUPERTREND_LENGTH, SUPERTREND_FACTOR, ADX_LENGTH, ATR_LENGTH, RSI_LENGTH
 
 from concurrent.futures import ProcessPoolExecutor, as_completed
 
 def run_simulation(tp_mult, tp_pct, df_final):
-    res, _ = simulate(df_final, use_ema_filter=True, tp_multiplier=tp_mult, tp_percent=tp_pct)
+    res, _ = simulate(df_final, use_ema_filter=True, tp_multiplier=tp_mult, tp_percent=tp_pct, use_rsi_filter=True)
     return {
         'multiplier': round(tp_mult, 2),
         'percent': round(tp_pct, 2),
@@ -33,6 +33,7 @@ def run_optimization():
     df_st[f'EMA_{EMA_LENGTH}'] = DataProcessor.calculate_ema(df_st, length=EMA_LENGTH)[f'EMA_{EMA_LENGTH}']
     df_st['ADX'] = DataProcessor.calculate_adx(df, length=ADX_LENGTH)
     df_st['ATR'] = DataProcessor.calculate_atr(df, length=ATR_LENGTH)
+    df_st['RSI'] = DataProcessor.calculate_rsi(df, length=RSI_LENGTH)
     df_final = df_st
 
     # 3. Define grid

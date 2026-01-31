@@ -80,6 +80,19 @@ class DataProcessor:
         return df
 
     @staticmethod
+    def calculate_rsi(df, length=14):
+        delta = df['close'].diff()
+        gain = (delta.where(delta > 0, 0))
+        loss = (-delta.where(delta < 0, 0))
+        
+        avg_gain = gain.ewm(alpha=1/length, adjust=False).mean()
+        avg_loss = loss.ewm(alpha=1/length, adjust=False).mean()
+        
+        rs = avg_gain / avg_loss
+        rsi = 100 - (100 / (1 + rs))
+        return rsi
+
+    @staticmethod
     def calculate_supertrend(df):
         # Manual SuperTrend Implementation
         length = SUPERTREND_LENGTH

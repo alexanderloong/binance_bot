@@ -1,4 +1,4 @@
-# Binance SuperTrend & EMA Trading Bot 🚀 (v1.6.1)
+# Binance SuperTrend & EMA Trading Bot 🚀 (v1.7.0)
 
 A robust, automated cryptocurrency trading bot for Binance Futures, built with Python. This bot utilizes a trend-following strategy combining **SuperTrend** and **EMA 99** (default) to capture major market moves while filtering out noise.
 
@@ -29,20 +29,20 @@ The bot implements an optimized trend-following strategy designed for the **15m 
 *   **EMA 99**: Long-term trend filter. Trades are only opened in the direction of the EMA.
 *   **ADX (14)**: Trend Strength filter. Bot only enters when ADX > 19 (Optimized for 15m).
 *   **ATR (14)**: Measures market volatility.
+*   **RSI (14)**: Overbought/Oversold filter to avoid market extremes.
 
 ### 2. Execution Logic (Capital Protection & Profit Optimization)
 
 The execution logic is split into hai independent steps: **Exit (Priority)** and **Entry (Filtered)**.
 
-| Current State | Event (SuperTrend) | EMA Filter | ADX Filter | Action | Resulting State |
-| :--- | :--- | :--- | :--- | :--- | :--- |
-| **Empty** | Red $\rightarrow$ **Green** | Price > EMA 99 | **ADX > 22** | **Open LONG** | LONG |
-| **Empty** | Red $\rightarrow$ **Green** | Price > EMA 99 | ADX < 22 | Wait (Weak Trend) | Empty |
-| **Empty** | Green $\rightarrow$ **Red** | Price < EMA 99 | **ADX > 22** | **Open SHORT** | SHORT |
-| **LONG** | Green $\rightarrow$ **Red** | Any | Any | **Close LONG** | Empty |
-| **SHORT** | Red $\rightarrow$ **Green** | Any | Any | **Close SHORT** | Empty |
-| **ANY** | Price hits **5.0x ATR** | Any | Any | **Partial TP (10%)** | Holding (Reduced) |
-| **ANY** | Any | Any | Any | **ATR Stop Loss (0.9x)** | Empty |
+| Current State | Event (SuperTrend) | EMA Filter | ADX Filter | RSI Filter | Action | Resulting State |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| **Empty** | Red $\rightarrow$ **Green** | Price > EMA 99 | **ADX > 19** | **RSI < 70** | **Open LONG** | LONG |
+| **Empty** | Green $\rightarrow$ **Red** | Price < EMA 99 | **ADX > 19** | **RSI > 30** | **Open SHORT** | SHORT |
+| **LONG** | Green $\rightarrow$ **Red** | Any | Any | Any | **Close LONG** | Empty |
+| **SHORT** | Red $\rightarrow$ **Green** | Any | Any | Any | **Close SHORT** | Empty |
+| **ANY** | Price hits **5.0x ATR** | Any | Any | Any | **Partial TP (10%)** | Holding (Reduced) |
+| **ANY** | Price hits **0.9x ATR SL** | Any | Any | Any | **Close All** | Empty |
 
 **Key Principles:**
 *   **Active Profit/Loss Protection**: Positions are closed immediately when the SuperTrend flips, ensuring the bot doesn't hold against the trend.
@@ -120,6 +120,8 @@ LEVERAGE = 9
 POSITION_SIZE_PERCENT = 0.25
 ADX_THRESHOLD = 19
 ATR_MULTIPLIER = 0.9
+RSI_OVERBOUGHT = 70
+RSI_OVERSOLD = 30
 PARTIAL_TP_ENABLED = True
 PARTIAL_TP_MULTIPLIER = 5.0
 PARTIAL_TP_PERCENT = 0.1

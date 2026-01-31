@@ -9,10 +9,11 @@ from config import (
     SYMBOL, TIMEFRAME, SUPERTREND_LENGTH, SUPERTREND_FACTOR, EMA_LENGTH,
     POSITION_SIZE_PERCENT, LEVERAGE, ADX_LENGTH, ADX_THRESHOLD, 
     ATR_LENGTH, ATR_MULTIPLIER, PARTIAL_TP_ENABLED, 
-    PARTIAL_TP_MULTIPLIER, PARTIAL_TP_PERCENT
+    PARTIAL_TP_MULTIPLIER, PARTIAL_TP_PERCENT,
+    RSI_LENGTH, RSI_OVERBOUGHT, RSI_OVERSOLD
 )
 
-def simulate(df, use_ema_filter=True, tp_multiplier=PARTIAL_TP_MULTIPLIER, tp_percent=PARTIAL_TP_PERCENT, sl_multiplier=ATR_MULTIPLIER, adx_threshold=ADX_THRESHOLD):
+def simulate(df, use_ema_filter=True, tp_multiplier=PARTIAL_TP_MULTIPLIER, tp_percent=PARTIAL_TP_PERCENT, sl_multiplier=ATR_MULTIPLIER, adx_threshold=ADX_THRESHOLD, use_rsi_filter=True):
     initial_balance = 1000
     balance = initial_balance
     position_amt = 0 
@@ -106,12 +107,17 @@ def simulate(df, use_ema_filter=True, tp_multiplier=PARTIAL_TP_MULTIPLIER, tp_pe
         adx_val = current_candle['ADX']
         is_trending = adx_val > adx_threshold
         
+        # New: RSI Filter
+        rsi_val = current_candle['RSI']
+        rsi_long_ok = rsi_val < RSI_OVERBOUGHT if use_rsi_filter else True
+        rsi_short_ok = rsi_val > RSI_OVERSOLD if use_rsi_filter else True
+        
         signal = None
         if curr_trend == 1 and prev_trend == -1 and is_uptrend:
-            if is_trending:
+            if is_trending and rsi_long_ok:
                 signal = 'LONG'
         elif curr_trend == -1 and prev_trend == 1 and is_downtrend:
-            if is_trending:
+            if is_trending and rsi_short_ok:
                 signal = 'SHORT'
             
         if signal and position_amt == 0:
@@ -301,11 +307,12 @@ def run_backtest():
     df_st[f'EMA_{EMA_LENGTH}'] = DataProcessor.calculate_ema(df_st, length=EMA_LENGTH)[f'EMA_{EMA_LENGTH}']
     df_st['ADX'] = DataProcessor.calculate_adx(df, length=ADX_LENGTH)
     df_st['ATR'] = DataProcessor.calculate_atr(df, length=ATR_LENGTH)
+    df_st['RSI'] = DataProcessor.calculate_rsi(df, length=RSI_LENGTH)
     df_final = df_st
     
     # Run simulation with verbose output (we will modify simulate to return trades and we print them)
     # Or just print after simulation
-    res, trades = simulate(df_final, use_ema_filter=True)
+    res, trades = simulate(df_final, use_ema_filter=True, use_rsi_filter=True)
     
     print("\n--- Trade History ---")
     for t in trades:
@@ -336,10 +343,10 @@ def run_backtest():
     # Generate Performance Summary Plot
     try:
         from optimize.plot_results import plot_performance
-        print("\n📊 Generating Performance Chart...")
+        print("\nGenerating Performance Chart...")
         plot_performance()
     except Exception as e:
-        print(f"⚠️ Could not generate chart: {e}")
+        print(f"Could not generate chart: {e}")
 
 if __name__ == "__main__":
     run_backtest()

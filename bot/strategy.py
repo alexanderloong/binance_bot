@@ -5,7 +5,8 @@ from config import (
     SUPERTREND_LENGTH, SUPERTREND_FACTOR, EMA_LENGTH, TIMEFRAME, 
     ADX_LENGTH, ADX_THRESHOLD, ATR_LENGTH, ATR_MULTIPLIER, 
     PARTIAL_TP_ENABLED, PARTIAL_TP_MULTIPLIER, PARTIAL_TP_PERCENT,
-    MAX_TRADES_PER_HOUR, POSITION_SIZE_PERCENT, LEVERAGE
+    MAX_TRADES_PER_HOUR, POSITION_SIZE_PERCENT, LEVERAGE,
+    RSI_LENGTH, RSI_OVERBOUGHT, RSI_OVERSOLD
 )
 from .data_processor import DataProcessor
 from .utils import parse_timeframe_to_seconds
@@ -125,6 +126,7 @@ class Strategy:
         df_st[f'EMA_{EMA_LENGTH}'] = DataProcessor.calculate_ema(df_st, length=EMA_LENGTH)[f'EMA_{EMA_LENGTH}']
         df_st['ADX'] = DataProcessor.calculate_adx(df, length=ADX_LENGTH)
         df_st['ATR'] = DataProcessor.calculate_atr(df, length=ATR_LENGTH)
+        df_st['RSI'] = DataProcessor.calculate_rsi(df, length=RSI_LENGTH)
         df_final = df_st
         
         # Get the last closed candle (second to last row, as last row is unfinished)
@@ -142,9 +144,10 @@ class Strategy:
         ema_val = last_candle[f'EMA_{EMA_LENGTH}']
         adx_val = last_candle['ADX']
         atr_val = last_candle['ATR']
+        rsi_val = last_candle['RSI']
         candle_time = last_candle['timestamp'].strftime('%d-%m-%Y %H:%M:%S')
         
-        self.logger.info(f"Market Data: {candle_time} | Close: {close_price} | Trend: {current_trend} | EMA{EMA_LENGTH}: {ema_val:.2f} | ADX: {adx_val:.2f} | ATR: {atr_val:.2f}")
+        self.logger.info(f"Market Data: {candle_time} | Close: {close_price} | Trend: {current_trend} | EMA{EMA_LENGTH}: {ema_val:.2f} | ADX: {adx_val:.2f} | ATR: {atr_val:.2f} | RSI: {rsi_val:.2f}")
 
         # --- STALENESS CHECK (Only skip TRADE logic, not analysis logging) ---
         STALE_TOLERANCE = 120 
@@ -157,6 +160,10 @@ class Strategy:
 
         # Determine Trend Strength
         is_trending = adx_val > ADX_THRESHOLD
+        
+        # Determine RSI Conditions
+        rsi_long_ok = rsi_val < RSI_OVERBOUGHT
+        rsi_short_ok = rsi_val > RSI_OVERSOLD
         
         # Determine Signal based on Trend Flip + EMA Filter
         signal = None
@@ -181,15 +188,17 @@ class Strategy:
         # 2. LOGIC MỞ LỆNH (Entry Filtered)
         signal = None
         if current_trend == 1 and previous_trend == -1 and is_uptrend_long:
-            if is_trending:
+            if is_trending and rsi_long_ok:
                 signal = 'LONG'
             else:
-                self.logger.info(f"LONG signal detected, but ADX ({adx_val:.2f}) is below threshold ({ADX_THRESHOLD}). Skipping.")
+                reason = "ADX low" if not is_trending else "RSI overbought"
+                self.logger.info(f"LONG signal detected, but {reason}. (ADX: {adx_val:.2f}, RSI: {rsi_val:.2f}). Skipping.")
         elif current_trend == -1 and previous_trend == 1 and is_downtrend_short:
-            if is_trending:
+            if is_trending and rsi_short_ok:
                 signal = 'SHORT'
             else:
-                self.logger.info(f"SHORT signal detected, but ADX ({adx_val:.2f}) is below threshold ({ADX_THRESHOLD}). Skipping.")
+                reason = "ADX low" if not is_trending else "RSI oversold"
+                self.logger.info(f"SHORT signal detected, but {reason}. (ADX: {adx_val:.2f}, RSI: {rsi_val:.2f}). Skipping.")
             
         if signal:
             if current_pos_amt == 0:

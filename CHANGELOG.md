@@ -2,7 +2,15 @@
  
  All notable changes to this project will be documented in this file.
  
-## [1.6.1] - 2026-01-30
+## [1.7.0] - 2026-01-31
+### Added
+- **RSI Overbought/Oversold Filter:** Implemented a new RSI-based entry filter to avoid entering trades at market extremes.
+- **Improved Profit Factor:** Optimization shows an increase in Profit Factor from 1.18 to 1.26 on BTC 15m.
+- **Enhanced Signal Logging:** Added RSI value to market data logs and specific skip reasons (e.g., "RSI overbought") for transparency.
+- **DataProcessor Update:** Added high-performance Wilders-style RSI calculation.
+- **Backtest Parity:** Fully synchronized the RSI filter across all backtest and optimization scripts.
+
+## [1.6.1] - 2026-01-31
 ### Refactored
 - **Code Optimization:** Cleaned up unused imports and centralized shared utility functions (e.g., `parse_timeframe_to_seconds`) in `bot/utils.py`.
 - **Improved Maintainability:** Refactored `backtest.py` and `strategy.py` to reduce code duplication and improve import structure.

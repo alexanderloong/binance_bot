@@ -2,7 +2,7 @@ import pandas as pd
 import numpy as np
 from backtest import simulate, get_backtest_data
 from bot.data_processor import DataProcessor
-from config import EMA_LENGTH, SUPERTREND_LENGTH, SUPERTREND_FACTOR, ADX_LENGTH, ATR_LENGTH, PARTIAL_TP_MULTIPLIER, PARTIAL_TP_PERCENT
+from config import EMA_LENGTH, SUPERTREND_LENGTH, SUPERTREND_FACTOR, ADX_LENGTH, ATR_LENGTH, PARTIAL_TP_MULTIPLIER, PARTIAL_TP_PERCENT, RSI_LENGTH
 from concurrent.futures import ProcessPoolExecutor, as_completed
 
 def run_simulation(sl_mult, df_final):
@@ -11,7 +11,8 @@ def run_simulation(sl_mult, df_final):
                       use_ema_filter=True, 
                       tp_multiplier=PARTIAL_TP_MULTIPLIER, 
                       tp_percent=PARTIAL_TP_PERCENT,
-                      sl_multiplier=sl_mult)
+                      sl_multiplier=sl_mult,
+                      use_rsi_filter=True)
     return {
         'atr_multiplier': round(sl_mult, 2),
         'pnl_pct': res['pnl_pct'],
@@ -38,6 +39,7 @@ def run_optimization():
     df_st[f'EMA_{EMA_LENGTH}'] = DataProcessor.calculate_ema(df_st, length=EMA_LENGTH)[f'EMA_{EMA_LENGTH}']
     df_st['ADX'] = DataProcessor.calculate_adx(df, length=ADX_LENGTH)
     df_st['ATR'] = DataProcessor.calculate_atr(df, length=ATR_LENGTH)
+    df_st['RSI'] = DataProcessor.calculate_rsi(df, length=RSI_LENGTH)
     df_final = df_st
 
     # 3. Define range for ATR Multiplier

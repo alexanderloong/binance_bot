@@ -23,6 +23,11 @@ ADX_THRESHOLD = 19         # Trend strength threshold (common: 20 or 25)
 ATR_LENGTH = 14               # Standard ATR length
 ATR_MULTIPLIER = 0.9          # ATR multiplier for Stop Loss (Proposed: 1.5 - 2.0)
 
+# RSI Filter Settings
+RSI_LENGTH = 14
+RSI_OVERBOUGHT = 70
+RSI_OVERSOLD = 30
+
 # Partial Take Profit Settings
 PARTIAL_TP_ENABLED = True
 PARTIAL_TP_MULTIPLIER = 5.0   # Take profit at 2.0x ATR

@@ -1,4 +1,4 @@
-# Binance Trading Bot - v1.6.1
+# Binance Trading Bot - v1.7.0 (RSI Filter Update)
 import time
 from bot.exchange_client import ExchangeClient
 from bot.strategy import Strategy
