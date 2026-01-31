@@ -352,7 +352,7 @@ def run_backtest():
     try:
         from optimize.plot_results import plot_performance
         print("\nGenerating Performance Chart...")
-        plot_performance()
+        plot_performance(df_final, trades, res)
     except Exception as e:
         print(f"Could not generate chart: {e}")
 

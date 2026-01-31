@@ -12,48 +12,37 @@ from backtest import get_backtest_data, simulate
 from bot.data_processor import DataProcessor
 from config import EMA_LENGTH, ADX_LENGTH, ATR_LENGTH, RSI_LENGTH, VOLUME_MA_LENGTH
 
-def plot_performance():
-    # 1. Get Data and Run Simulation
-    print("🔄 Loading data and running simulation...")
-    df = get_backtest_data()
-    if df is None:
-        print("❌ No data found.")
-        return
+def plot_performance(df=None, trades=None, res=None):
+    # 1. Get Data and Run Simulation (if not provided)
+    if df is None or trades is None or res is None:
+        print("🔄 Loading data and running simulation...")
+        df = get_backtest_data()
+        if df is None:
+            print("❌ No data found.")
+            return
 
-    # Calculate indicators needed for simulation
-    df_ha = DataProcessor.calculate_heikin_ashi(df)
-    df_st = DataProcessor.calculate_supertrend(df_ha)
-    df_st[f'EMA_{EMA_LENGTH}'] = DataProcessor.calculate_ema(df_st, length=EMA_LENGTH)[f'EMA_{EMA_LENGTH}']
-    df_st['ADX'] = DataProcessor.calculate_adx(df, length=ADX_LENGTH)
-    df_st['ATR'] = DataProcessor.calculate_atr(df, length=ATR_LENGTH)
-    df_st['RSI'] = DataProcessor.calculate_rsi(df, length=RSI_LENGTH)
-    df_st = DataProcessor.calculate_volume_ma(df_st, length=VOLUME_MA_LENGTH)
-    
-    # Run simulation
-    res, trades = simulate(df_st, use_ema_filter=True, use_rsi_filter=True, use_volume_filter=True)
+        # Calculate indicators needed for simulation
+        df_ha = DataProcessor.calculate_heikin_ashi(df)
+        df_st = DataProcessor.calculate_supertrend(df_ha)
+        df_st[f'EMA_{EMA_LENGTH}'] = DataProcessor.calculate_ema(df_st, length=EMA_LENGTH)[f'EMA_{EMA_LENGTH}']
+        df_st['ADX'] = DataProcessor.calculate_adx(df, length=ADX_LENGTH)
+        df_st['ATR'] = DataProcessor.calculate_atr(df, length=ATR_LENGTH)
+        df_st['RSI'] = DataProcessor.calculate_rsi(df, length=RSI_LENGTH)
+        df_st = DataProcessor.calculate_volume_ma(df_st, length=VOLUME_MA_LENGTH)
+        
+        # Run simulation
+        res, trades = simulate(df_st, use_ema_filter=True, use_rsi_filter=True, use_volume_filter=True)
+    else:
+        # If passed in, 'df' IS the final dataframe (already processed)
+        df_st = df
     
     if not trades:
         print("❌ No trades executed.")
         return
 
     # 2. Prepare Data for Plotting
-    equity_curve = []
-    current_balance = 1000 # Initial balance
-    dates = []
     
     # We need to reconstruct the equity curve over time
-    # Create a DataFrame from trades
-    trade_df = pd.DataFrame(trades)
-    
-    # Filter only PnL generating events (CLOSE, STOP_LOSS, PARTIAL_TP, FINAL_CLOSE)
-    # Entry fees are also important for equity
-    
-    pnl_events = []
-    
-    # Sort trades by time just in case
-    # trades are already sorted by execution time in list, but let's be sure
-    # Ensure 'time' is datetime
-    
     running_balance = 1000
     equity_data = [{'time': df['timestamp'].iloc[0], 'balance': 1000}]
     
@@ -123,7 +112,6 @@ def plot_performance():
 
     plt.tight_layout()
     
-    import os
     # Ensure resource directory exists
     resource_dir = 'resource'
     if not os.path.exists(resource_dir):

@@ -2,6 +2,24 @@
  
  All notable changes to this project will be documented in this file.
  
+## [1.9.2] - 2026-01-31
+### Added
+- **Performance Visualization:** Integrated `matplotlib` and `seaborn` for generating equity curve and drawdown charts directly after backtesting.
+- **Dependencies:** Updated `requirements.txt` with plotting libraries.
+
+### Changed
+- **Strategy Tuning (Aggressive):** Shifted to an aggressive growth configuration.
+    - **Leverage:** Increased to **15x**.
+    - **Position Size:** Adjusted to **25%** for balanced management of the higher leverage.
+- **Code Optimization:** Refactored `backtest.py` and `optimize/plot_results.py` to seamlessly share data, improving chart generation speed.
+
+## [1.9.1] - 2026-01-31
+### Changed
+- **Config Update:** Refined trading parameters based on recent testing.
+    - **Leverage:** Adjusted to **7x** (Safe/Optimal for BTC).
+    - **Position Size:** Increased to **75%** for higher capital utilization.
+    - **Partial Take Profit:** Adjusted target to **5.3x ATR**.
+
 ## [1.9.0] - 2026-01-31
 ### Added
 - **Leverage & Position Size Optimizer:** New optimization script to find optimal leverage and position size based on target Max Drawdown and Profit Factor.

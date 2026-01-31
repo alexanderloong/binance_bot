@@ -8,14 +8,14 @@ from backtest import simulate
 # OPTIMIZATION TARGETS
 # ============================================================================
 TARGET_MAX_DRAWDOWN = 25.0      # Maximum acceptable drawdown (%)
-TARGET_MIN_PROFIT_FACTOR = 1.7  # Minimum acceptable profit factor
+TARGET_MIN_PROFIT_FACTOR = 1.5  # Minimum acceptable profit factor
 
 # Search ranges
-LEVERAGE_MIN = 5
-LEVERAGE_MAX = 25
-LEVERAGE_STEP = 5
+LEVERAGE_MIN = 6
+LEVERAGE_MAX = 13
+LEVERAGE_STEP = 1
 
-POSITION_SIZE_MIN = 0.10  # 10%
+POSITION_SIZE_MIN = 0.50  # 10%
 POSITION_SIZE_MAX = 1.00  # 100%
 POSITION_SIZE_STEP = 0.05  # 5%
 # ============================================================================

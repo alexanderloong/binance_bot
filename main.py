@@ -1,4 +1,4 @@
-# Binance Trading Bot - v1.9.0 (Leverage Optimization)
+# Binance Trading Bot - v1.9.2 (Aggressive Growth)
 import time
 from bot.exchange_client import ExchangeClient
 from bot.strategy import Strategy
