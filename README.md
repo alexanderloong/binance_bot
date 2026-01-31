@@ -1,4 +1,4 @@
-# Binance SuperTrend & EMA Trading Bot 🚀 (v1.7.0)
+# Binance SuperTrend & EMA Trading Bot 🚀 (v1.7.1)
 
 A robust, automated cryptocurrency trading bot for Binance Futures, built with Python. This bot utilizes a trend-following strategy combining **SuperTrend** and **EMA 99** (default) to capture major market moves while filtering out noise.
 
@@ -37,8 +37,8 @@ The execution logic is split into hai independent steps: **Exit (Priority)** and
 
 | Current State | Event (SuperTrend) | EMA Filter | ADX Filter | RSI Filter | Action | Resulting State |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| **Empty** | Red $\rightarrow$ **Green** | Price > EMA 99 | **ADX > 19** | **RSI < 70** | **Open LONG** | LONG |
-| **Empty** | Green $\rightarrow$ **Red** | Price < EMA 99 | **ADX > 19** | **RSI > 30** | **Open SHORT** | SHORT |
+| **Empty** | Red $\rightarrow$ **Green** | Price > EMA 99 | **ADX > 19** | **RSI < 66** | **Open LONG** | LONG |
+| **Empty** | Green $\rightarrow$ **Red** | Price < EMA 99 | **ADX > 19** | **RSI > 35** | **Open SHORT** | SHORT |
 | **LONG** | Green $\rightarrow$ **Red** | Any | Any | Any | **Close LONG** | Empty |
 | **SHORT** | Red $\rightarrow$ **Green** | Any | Any | Any | **Close SHORT** | Empty |
 | **ANY** | Price hits **5.0x ATR** | Any | Any | Any | **Partial TP (10%)** | Holding (Reduced) |
@@ -120,8 +120,8 @@ LEVERAGE = 9
 POSITION_SIZE_PERCENT = 0.25
 ADX_THRESHOLD = 19
 ATR_MULTIPLIER = 0.9
-RSI_OVERBOUGHT = 70
-RSI_OVERSOLD = 30
+RSI_OVERBOUGHT = 66
+RSI_OVERSOLD = 35
 PARTIAL_TP_ENABLED = True
 PARTIAL_TP_MULTIPLIER = 5.0
 PARTIAL_TP_PERCENT = 0.1

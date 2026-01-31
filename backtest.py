@@ -13,7 +13,7 @@ from config import (
     RSI_LENGTH, RSI_OVERBOUGHT, RSI_OVERSOLD
 )
 
-def simulate(df, use_ema_filter=True, tp_multiplier=PARTIAL_TP_MULTIPLIER, tp_percent=PARTIAL_TP_PERCENT, sl_multiplier=ATR_MULTIPLIER, adx_threshold=ADX_THRESHOLD, use_rsi_filter=True):
+def simulate(df, use_ema_filter=True, tp_multiplier=PARTIAL_TP_MULTIPLIER, tp_percent=PARTIAL_TP_PERCENT, sl_multiplier=ATR_MULTIPLIER, adx_threshold=ADX_THRESHOLD, use_rsi_filter=True, rsi_overbought=RSI_OVERBOUGHT, rsi_oversold=RSI_OVERSOLD):
     initial_balance = 1000
     balance = initial_balance
     position_amt = 0 
@@ -109,8 +109,8 @@ def simulate(df, use_ema_filter=True, tp_multiplier=PARTIAL_TP_MULTIPLIER, tp_pe
         
         # New: RSI Filter
         rsi_val = current_candle['RSI']
-        rsi_long_ok = rsi_val < RSI_OVERBOUGHT if use_rsi_filter else True
-        rsi_short_ok = rsi_val > RSI_OVERSOLD if use_rsi_filter else True
+        rsi_long_ok = rsi_val < rsi_overbought if use_rsi_filter else True
+        rsi_short_ok = rsi_val > rsi_oversold if use_rsi_filter else True
         
         signal = None
         if curr_trend == 1 and prev_trend == -1 and is_uptrend:

@@ -25,8 +25,8 @@ ATR_MULTIPLIER = 0.9          # ATR multiplier for Stop Loss (Proposed: 1.5 - 2.
 
 # RSI Filter Settings
 RSI_LENGTH = 14
-RSI_OVERBOUGHT = 70
-RSI_OVERSOLD = 30
+RSI_OVERBOUGHT = 66
+RSI_OVERSOLD = 35
 
 # Partial Take Profit Settings
 PARTIAL_TP_ENABLED = True

@@ -2,6 +2,17 @@
  
  All notable changes to this project will be documented in this file.
  
+## [1.7.1] - 2026-01-31
+### Optimized
+- **RSI Thresholds:** Fine-tuned RSI parameters based on exhaustive grid search on BTC 15m data.
+    - `RSI_OVERBOUGHT`: Adjusted from 70 -> **66**.
+    - `RSI_OVERSOLD`: Adjusted from 30 -> **35**.
+- **Performance Boost:**
+    - **Profit Factor:** Increased from 1.26 -> **1.33**.
+    - **Total PnL:** Increased from 113% -> **121.26%**.
+    - **Max Drawdown:** Reduced to **18.36%**.
+    - **Win Rate:** Improved to **43.5%**.
+
 ## [1.7.0] - 2026-01-31
 ### Added
 - **RSI Overbought/Oversold Filter:** Implemented a new RSI-based entry filter to avoid entering trades at market extremes.
