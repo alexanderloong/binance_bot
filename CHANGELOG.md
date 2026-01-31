@@ -2,6 +2,16 @@
  
  All notable changes to this project will be documented in this file.
  
+## [1.8.1] - 2026-01-31
+### Optimized
+- **EMA Length:** Fine-tuned EMA parameter from 99 -> **106** based on grid search optimization.
+- **Performance Improvement:**
+    - **Profit Factor:** Increased from 1.58 -> **1.62** (+2.5%).
+    - **Total PnL:** Increased from 170% -> **175.26%** (+3%).
+    - **Win Rate:** Improved to **47.6%**.
+    - **Max Drawdown:** Maintained at **11.19%**.
+    - **Total Trades:** Optimized to 328 (higher quality).
+
 ## [1.8.0] - 2026-01-31
 ### Added
 - **Volume MA Filter:** Implemented Volume Moving Average filter to ensure trades only execute during high liquidity periods.

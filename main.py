@@ -1,4 +1,4 @@
-# Binance Trading Bot - v1.8.0 (Volume MA Filter)
+# Binance Trading Bot - v1.8.1 (EMA Optimization)
 import time
 from bot.exchange_client import ExchangeClient
 from bot.strategy import Strategy

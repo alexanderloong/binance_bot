@@ -1,4 +1,4 @@
-# Binance SuperTrend & EMA Trading Bot 🚀 (v1.8.0)
+# Binance SuperTrend & EMA Trading Bot 🚀 (v1.8.1)
 
 A robust, automated cryptocurrency trading bot for Binance Futures, built with Python. This bot utilizes a trend-following strategy combining **SuperTrend** and **EMA 99** (default) to capture major market moves while filtering out noise.
 
@@ -25,8 +25,8 @@ The bot implements an optimized trend-following strategy designed for the **15m 
 
 ### 1. Indicators
 *   **Heikin Ashi Candles**: Smoothens price action for better trend identification.
-*   **SuperTrend (15, 1.5)**: Used to detect short-term price momentum shifts.
-*   **EMA 99**: Long-term trend filter. Trades are only opened in the direction of the EMA.
+*   **SuperTrend (15, 1.5)**: Core trend indicator using Heikin Ashi candles.
+*   **EMA (106)**: Long-term trend filter. Bot only trades in the direction of the EMA.
 *   **ADX (14)**: Trend Strength filter. Bot only enters when ADX > 19 (Optimized for 15m).
 *   **ATR (14)**: Measures market volatility.
 *   **RSI (14)**: Overbought/Oversold filter to avoid market extremes.
@@ -38,8 +38,8 @@ The execution logic is split into hai independent steps: **Exit (Priority)** and
 
 | Current State | Event (SuperTrend) | EMA Filter | ADX Filter | RSI Filter | Volume Filter | Action | Resulting State |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| **Empty** | Red $\rightarrow$ **Green** | Price > EMA 99 | **ADX > 19** | **RSI < 66** | **Vol > MA(55)** | **Open LONG** | LONG |
-| **Empty** | Green $\rightarrow$ **Red** | Price < EMA 99 | **ADX > 19** | **RSI > 35** | **Vol > MA(55)** | **Open SHORT** | SHORT |
+| **Empty** | Red $\rightarrow$ **Green** | Price > EMA 106 | **ADX > 19** | **RSI < 66** | **Vol > MA(55)** | **Open LONG** | LONG |
+| **Empty** | Green $\rightarrow$ **Red** | Price < EMA 106 | **ADX > 19** | **RSI > 35** | **Vol > MA(55)** | **Open SHORT** | SHORT |
 | **LONG** | Green $\rightarrow$ **Red** | Any | Any | Any | Any | **Close LONG** | Empty |
 | **SHORT** | Red $\rightarrow$ **Green** | Any | Any | Any | Any | **Close SHORT** | Empty |
 | **ANY** | Price hits **5.0x ATR** | Any | Any | Any | **Partial TP (10%)** | Holding (Reduced) |
@@ -116,7 +116,7 @@ SYMBOL = "BTC/USDT"
 TIMEFRAME = "15m"
 SUPERTREND_LENGTH = 15
 SUPERTREND_FACTOR = 1.5
-EMA_LENGTH = 99
+EMA_LENGTH = 106
 LEVERAGE = 9
 POSITION_SIZE_PERCENT = 0.25
 ADX_THRESHOLD = 19
