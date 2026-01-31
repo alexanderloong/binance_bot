@@ -14,7 +14,7 @@ from config import (
     VOLUME_MA_LENGTH
 )
 
-def simulate(df, use_ema_filter=True, tp_multiplier=PARTIAL_TP_MULTIPLIER, tp_percent=PARTIAL_TP_PERCENT, sl_multiplier=ATR_MULTIPLIER, adx_threshold=ADX_THRESHOLD, use_rsi_filter=True, rsi_overbought=RSI_OVERBOUGHT, rsi_oversold=RSI_OVERSOLD, use_volume_filter=True, volume_ma_length=VOLUME_MA_LENGTH):
+def simulate(df, use_ema_filter=True, tp_multiplier=PARTIAL_TP_MULTIPLIER, tp_percent=PARTIAL_TP_PERCENT, sl_multiplier=ATR_MULTIPLIER, adx_threshold=ADX_THRESHOLD, use_rsi_filter=True, rsi_overbought=RSI_OVERBOUGHT, rsi_oversold=RSI_OVERSOLD, use_volume_filter=True, volume_ma_length=VOLUME_MA_LENGTH, leverage=LEVERAGE, position_size_percent=POSITION_SIZE_PERCENT):
     initial_balance = 1000
     balance = initial_balance
     position_amt = 0 
@@ -128,7 +128,7 @@ def simulate(df, use_ema_filter=True, tp_multiplier=PARTIAL_TP_MULTIPLIER, tp_pe
                 signal = 'SHORT'
             
         if signal and position_amt == 0:
-            trade_value = balance * POSITION_SIZE_PERCENT * LEVERAGE
+            trade_value = balance * position_size_percent * leverage
             
             # Entry Fee
             entry_fee = trade_value * commission_rate
