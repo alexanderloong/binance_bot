@@ -7,7 +7,7 @@ Finds optimal leverage and position size based on target criteria.
 # OPTIMIZATION TARGETS (Change these values as needed)
 # ============================================================================
 TARGET_MAX_DRAWDOWN = 25.0      # Maximum acceptable drawdown (%)
-TARGET_MIN_PROFIT_FACTOR = 1.5  # Minimum acceptable profit factor
+TARGET_MIN_PROFIT_FACTOR = 1.7  # Minimum acceptable profit factor
 
 # Search ranges
 LEVERAGE_MIN = 5
