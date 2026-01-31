@@ -1,4 +1,4 @@
-# Binance SuperTrend & EMA Trading Bot 🚀 (v1.8.1)
+# Binance SuperTrend & EMA Trading Bot 🚀 (v1.9.0)
 
 A robust, automated cryptocurrency trading bot for Binance Futures, built with Python. This bot utilizes a trend-following strategy combining **SuperTrend** and **EMA 99** (default) to capture major market moves while filtering out noise.
 
@@ -117,8 +117,8 @@ TIMEFRAME = "15m"
 SUPERTREND_LENGTH = 15
 SUPERTREND_FACTOR = 1.5
 EMA_LENGTH = 106
-LEVERAGE = 9
-POSITION_SIZE_PERCENT = 0.25
+LEVERAGE = 35              # Optimized for max returns (or use 5x for safety)
+POSITION_SIZE_PERCENT = 0.15  # Optimized for balanced risk/reward
 ADX_THRESHOLD = 19
 ATR_MULTIPLIER = 0.9
 RSI_OVERBOUGHT = 66

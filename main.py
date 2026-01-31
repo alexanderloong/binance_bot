@@ -1,4 +1,4 @@
-# Binance Trading Bot - v1.8.1 (EMA Optimization)
+# Binance Trading Bot - v1.9.0 (Leverage Optimization)
 import time
 from bot.exchange_client import ExchangeClient
 from bot.strategy import Strategy

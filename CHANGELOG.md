@@ -2,6 +2,23 @@
  
  All notable changes to this project will be documented in this file.
  
+## [1.9.0] - 2026-01-31
+### Added
+- **Leverage & Position Size Optimizer:** New optimization script to find optimal leverage and position size based on target Max Drawdown and Profit Factor.
+- **Target-Based Optimization:** Users can set risk tolerance (Max DD) and consistency requirements (Min PF) to find suitable configurations.
+- **Comprehensive Risk Metrics:** All optimization scripts now track Max Drawdown and Profit Factor for better risk assessment.
+
+### Optimized
+- **Leverage:** Optimized from 9x -> **35x** for maximum returns (768% PnL).
+- **Position Size:** Optimized from 25% -> **15%** for balanced risk/reward.
+- **Alternative Safe Config:** 5x leverage with 10% position size for conservative traders (27% PnL, 2.6% MDD, 2.1 PF).
+
+### Performance (Best Config: 35x / 15%)
+- **Total PnL:** **768.57%** (7.7x return)
+- **Profit Factor:** **1.87**
+- **Max Drawdown:** **24.60%**
+- **Win Rate:** 47.6%
+
 ## [1.8.1] - 2026-01-31
 ### Optimized
 - **EMA Length:** Fine-tuned EMA parameter from 99 -> **106** based on grid search optimization.
