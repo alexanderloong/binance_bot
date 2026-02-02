@@ -1,136 +1,159 @@
-# Binance SuperTrend & EMA Trading Bot 🚀 (v1.9.2)
+# 🤖 Binance Futures Algorithmic Trading Bot
 
-A robust, automated cryptocurrency trading bot for Binance Futures, built with Python. This bot utilizes a trend-following strategy combining **SuperTrend** and **EMA 99** (default) to capture major market moves while filtering out noise.
+![Python](https://img.shields.io/badge/Python-3.10%2B-blue?style=for-the-badge&logo=python)
+![Binance](https://img.shields.io/badge/Binance-Futures-FCD535?style=for-the-badge&logo=binance)
+![Strategy](https://img.shields.io/badge/Strategy-Trend%20Following-success?style=for-the-badge)
+![License](https://img.shields.io/badge/License-MIT-green?style=for-the-badge)
 
-![Python](https://img.shields.io/badge/Python-3.8+-blue.svg)
-![License](https://img.shields.io/badge/License-MIT-green.svg)
+A **professional-grade, high-frequency** algorithmic trading bot for Bitcoin Futures (BTC/USDT). Built with a modular architecture, this bot leverages advanced technical analysis (SuperTrend, EMA, ADX, RSI) and robust risk management to capture major market moves while filtering out noise.
 
-## 🌟 Key Features
-
-*   **Automated Trading**: Executes Long and Short positions 24/7 using the **Official Binance SDK** (`binance-connector`).
-*   **Trend Following Strategy**: Uses SuperTrend for signals, EMA for trend confirmation, and **ADX** for strength filtering.
-*   **High-Fidelity Backtesting**: Pre-flight your strategy with a simulator that uses **Live Binance Market Data** and accurately models candle-close execution timing.
-*   **Profit Optimization**: **Partial Take Profit (Partial TP)** allows locking in gains at 5.0x ATR while riding the remainder of the trend.
-*   **Risk Management**: Configurable position sizing, leverage, and **Dynamic ATR Stop Loss**.
-*   **Resilient**: Handles API connection errors and gracefully manages Binance Testnet quirks.
-*   **Testnet Support**: Safely test strategies on Binance Testnet before going live.
-
-![Performance Summary](resource/performance_summary.png)
+> **Latest Version:** 1.10.0  
+> **Target:** BTC/USDT Perpetual  
+> **Performance:** ~697% PnL (Backtest Data)
 
 ---
 
-## 📈 Trading Strategy
+## 📈 Strategy Overview: "Trend Hunter v1.10"
 
-The bot implements an optimized trend-following strategy designed for the **15m timeframe**.
+This bot operates on a **Trend Following** philosophy. It aims to enter large trends early and ride them until reversal, ignoring minor price fluctuations.
 
-### 1. Indicators
-*   **Heikin Ashi Candles**: Smoothens price action for better trend identification.
-*   **SuperTrend (15, 1.5)**: Core trend indicator using Heikin Ashi candles.
-*   **EMA (106)**: Long-term trend filter. Bot only trades in the direction of the EMA.
-*   **ADX (14)**: Trend Strength filter. Bot only enters when ADX > 19 (Optimized for 15m).
-*   **ATR (14)**: Measures market volatility.
-*   **RSI (14)**: Overbought/Oversold filter to avoid market extremes.
-*   **Volume MA (55)**: Liquidity filter. Trades only execute when volume > 55-period MA.
+### 🧠 Signal Logic
+The bot executes trade entries only when **ALL** the following conditions align:
 
-### 2. Execution Logic (Capital Protection & Profit Optimization)
+1.  **Trend Direction (EMA)**:
+    *   **Long**: Price > EMA (106)
+    *   **Short**: Price < EMA (106)
+    *   *Rationale*: Ensures we only trade in the direction of the dominant trend.
 
-The execution logic is split into hai independent steps: **Exit (Priority)** and **Entry (Filtered)**.
+2.  **Market Structure (SuperTrend)**:
+    *   **Long**: SuperTrend (16, 1.45) is GREEN.
+    *   **Short**: SuperTrend (16, 1.45) is RED.
+    *   *Rationale*: Provides precise entry triggers and trailing stop levels.
 
-| Current State | Event (SuperTrend) | EMA Filter | ADX Filter | RSI Filter | Volume Filter | Action | Resulting State |
-| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| **Empty** | Red $\rightarrow$ **Green** | Price > EMA 106 | **ADX > 19** | **RSI < 66** | **Vol > MA(55)** | **Open LONG** | LONG |
-| **Empty** | Green $\rightarrow$ **Red** | Price < EMA 106 | **ADX > 19** | **RSI > 35** | **Vol > MA(55)** | **Open SHORT** | SHORT |
-| **LONG** | Green $\rightarrow$ **Red** | Any | Any | Any | Any | **Close LONG** | Empty |
-| **SHORT** | Red $\rightarrow$ **Green** | Any | Any | Any | Any | **Close SHORT** | Empty |
-| **ANY** | Price hits **5.0x ATR** | Any | Any | Any | **Partial TP (10%)** | Holding (Reduced) |
-| **ANY** | Price hits **0.9x ATR SL** | Any | Any | Any | **Close All** | Empty |
+3.  **Trend Strength (ADX)**:
+    *   **ADX (14) > 19**
+    *   *Rationale*: Filters out "choppy" sideways markets where trend following strategies usually fail.
 
-**Key Principles:**
-*   **Active Profit/Loss Protection**: Positions are closed immediately when the SuperTrend flips, ensuring the bot doesn't hold against the trend.
-*   **Disciplined Entry**: New positions are only opened when the short-term trend (SuperTrend) aligns with the long-term trend (EMA).
-*   **Partial Take Profit**: Automatically takes partial profits to reduce risk and smooth the equity curve.
+4.  **Momentum Filter (RSI)**:
+    *   **Entry Range**: 35 < RSI (14) < 65
+    *   *Rationale*: Prevents "Buying the Top" (Overbought > 65) or "Selling the Bottom" (Oversold < 35).
+
+5.  **Volume Confirmation**:
+    *   **Volume > Volume MA (147)**
+    *   *Rationale*: Validates that the move is backed by significant market participation.
+
+### 🛡️ Risk Management (The "Survival" Engine)
+
+| Parameter | Setting | Description |
+| :--- | :--- | :--- |
+| **Leverage** | **15x** | Optimized for aggressive growth while maintaining margin safety. |
+| **Position Size** | **25%** | Allocates 25% of Total Equity per trade. |
+| **Stop Loss** | **0.9x ATR** | Dynamic Volatility-Based Stop Loss. Tight Stops = Small Losses. |
+| **Take Profit** | **Disabled** | "Let Profits Run". Positions are closed only on Trend Reversal. |
+| **Liquidation** | **Monitoring** | Logic includes liquidation price tracking to prevent total loss. |
+
+---
+
+## 🚀 Performance Metrics
+
+*Based on Backtest Data (Nov 2025 - Jan 2026)*
+
+| Metric | Value | Verdict |
+| :--- | :--- | :--- |
+| **Net Profit (PnL)** | **+697.03%** | 🚀 Extremely High |
+| **Profit Factor** | **1.80** | ✅ Highly Profitable |
+| **Win Rate** | **39.0%** | 📉 Classic Trend Following (Small wins/losses, Massive winners) |
+| **Max Drawdown** | **16.84%** | ⚠️ Managed Aggressive Risk |
+| **Total Trades** | **246** | ⚡ High Frequency (~4 trades/day) |
 
 ---
 
 ## 🛠️ Installation & Setup
 
-1.  **Clone the repository**:
-    ```bash
-    git clone https://github.com/yourusername/binance-bot.git
-    cd binance-bot
-    ```
+### 1. Requirements
+*   Python 3.10+
+*   Binance Account (API Key & Secret)
+*   Docker (Optional, for deployment)
 
-2.  **Install dependencies**:
-    ```bash
-    pip install -r resource/requirements.txt
-    ```
+### 2. Environment Setup
+Create a `.env` file in the root directory:
+```ini
+API_KEY=your_binance_api_key
+SECRET=your_binance_secret_key
+USE_TESTNET=False
+```
 
-3.  **Configuration**:
-    *   Create a `.env` file in the `resource` directory:
-        ```env
-        API_KEY=your_binance_api_key
-        SECRET=your_binance_secret_key
-        USE_TESTNET=True
-        ```
+### 3. Installation
+```bash
+# Clone the repository
+git clone https://github.com/alexanderloong/binance-bot.git
+cd binance-bot
 
----
-
-## 🚀 Deployment (Stable & Auto-Restart)
-
-To ensure the bot runs 24/7 with automatic recovery, Docker is highly recommended.
-
-### Running with Docker
-1.  Ensure [Docker Desktop](https://www.docker.com/products/docker-desktop/) is installed.
-2.  Start the bot:
-    ```bash
-    docker-compose up -d --build
-    ```
-3.  Check logs:
-    ```bash
-    docker-compose logs -f
-    ```
+# Install dependencies (Best to use a virtualenv)
+pip install -r requirements.txt
+```
 
 ---
 
-## 🚀 Usage
+## 🖥️ Usage
 
-### Manual Start
-Starts the scheduler to monitor market signals every minute.
+### 📊 Backtesting
+Validate strategy performance against historical data (automatically fetches live Binance data).
+```bash
+python backtest.py
+```
+> **Output**: Generates a detailed trade log and saves a performance chart to `resource/performance_summary.png`.
+
+### 🧬 Optimization
+Find the best parameters for the current market using multi-core grid search.
+```bash
+# Optimize EMA & SuperTrend
+python optimize/optimize_ema.py
+
+# Optimize ADX, Volume & ATR
+python optimize/optimize_adx.py
+```
+
+### 🔴 Run Live
+Start the bot to trade on your account.
 ```bash
 python main.py
 ```
 
-### Run Backtest
-Analyze historical performance. The results include PnL, Win Rate, and Max Drawdown.
+### 🐳 Run with Docker (Recommended)
+Deploy as a background service with auto-restart.
 ```bash
-python backtest.py
+# Build and Run
+docker-compose up -d --build
+
+# View Logs
+docker-compose logs -f binance-bot
 ```
 
 ---
 
-## ⚙️ Configuration (`config.py`)
+## 📂 Project Structure
 
-Fine-tune the strategy in `config.py`:
-```python
-SYMBOL = "BTC/USDT"
-TIMEFRAME = "15m"
-SUPERTREND_LENGTH = 15
-SUPERTREND_FACTOR = 1.5
-EMA_LENGTH = 106
-LEVERAGE = 15                # Aggressive Growth Config
-POSITION_SIZE_PERCENT = 0.25 # Use 25% of balance per position
-ADX_THRESHOLD = 19
-ATR_MULTIPLIER = 0.9
-RSI_OVERBOUGHT = 66
-RSI_OVERSOLD = 35
-VOLUME_MA_LENGTH = 55
-PARTIAL_TP_ENABLED = True
-PARTIAL_TP_MULTIPLIER = 5.3    # Take profit at 5.3x ATR
-PARTIAL_TP_PERCENT = 0.1       # Close 10% of position
 ```
+binance_bot/
+├── bot/
+│   ├── data_processor.py   # Technical Indicator Logic (EMA, RSI, ADX...)
+│   ├── exchange_client.py  # Binance API Wrapper
+│   └── strategy.py         # Core Trading Decision Engine
+├── optimize/               # Genetic Algorithms / Grid Search Scripts
+├── resource/               # Data Cache & Performance Charts
+├── backtest.py             # Backtesting Simulator
+├── config.py               # Central Configuration
+├── main.py                 # Application Entry Point
+└── Dockerfile              # Container Definition
+```
+
+---
+
+## 📝 Changelog
+See [CHANGELOG.md](CHANGELOG.md) for detailed release history.
 
 ---
 
 ## ⚠️ Disclaimer
-
-This software is for educational purposes only. Cryptocurrency trading involves significant risk. The authors are not responsible for any financial losses. Always test thoroughly on **Testnet**.
+*This software is for educational purposes only. Cryptocurrency trading involves high risk and is not suitable for every investor. The authors are not responsible for any financial losses incurred while using this bot.*

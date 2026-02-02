@@ -2,6 +2,28 @@
  
  All notable changes to this project will be documented in this file.
  
+## [1.10.0] - 2026-02-02
+### Changed
+- **Optimization**: Updated strategy parameters based on extensive backtesting for optimal Trend Following performance.
+    - Leverage: Increased to 15x.
+    - Position Size: Increased to 25% of balance.
+    - EMA Length: 106
+    - SuperTrend: 16 / 1.45 (Factor)
+    - RSI Range: 35 - 65
+    - Volume MA: 147
+- **Logic Update**: 
+    - Disabled Partial Take Profit to maximize Profit Factor (let profits run).
+    - Updated Win Rate calculation in backtest to correctly count Entry->Exit cycles instead of individual TP events.
+    - Added Liquidation Check in backtest logic (though not triggered with current robust SL settings).
+
+### Results
+- PnL: ~697% (backtest)
+- Profit Factor: 1.80
+- Max Drawdown: ~16.8%
+- Win Rate: 39% (Real Win Rate without partial TP inflation)
+
+![Performance Summary v1.10.0](resource/performance_summary_v1.10.0.png)
+
 ## [1.9.2] - 2026-01-31
 ### Added
 - **Performance Visualization:** Integrated `matplotlib` and `seaborn` for generating equity curve and drawdown charts directly after backtesting.
