@@ -15,8 +15,8 @@ TIMEFRAME = "15m"             # Changed to 15m to reduce noise and fees
 SUPERTREND_LENGTH = 16
 SUPERTREND_FACTOR = 1.45       # Higher factor = more stable trend
 EMA_LENGTH = 106              # Stronger trend filter
-LEVERAGE = 25                 # Optimal leverage for BTC
-POSITION_SIZE_PERCENT = 0.2   # Use 30% of balance per position (Balanced Risk/Reward)
+LEVERAGE = 20                 # Optimal leverage for BTC
+POSITION_SIZE_PERCENT = 0.22   # Use 30% of balance per position (Balanced Risk/Reward)
 MAX_TRADES_PER_HOUR = 5       # Safety: Limit trades per hour to prevent API spam
 ADX_LENGTH = 14               # Standard ADX length
 ADX_THRESHOLD = 19         # Trend strength threshold (common: 20 or 25)
