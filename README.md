@@ -56,7 +56,7 @@ The bot executes trade entries only when **ALL** the following conditions align:
 
 ## 🚀 Performance Metrics
 
-*Based on Backtest Data (Nov 2025 - Jan 2026)*
+*Based on Backtest Data (Feb 2025 - Feb 2026)*
 
 | Metric | Value | Verdict |
 | :--- | :--- | :--- |
@@ -64,7 +64,7 @@ The bot executes trade entries only when **ALL** the following conditions align:
 | **Profit Factor** | **1.80** | ✅ Highly Profitable |
 | **Win Rate** | **39.0%** | 📉 Classic Trend Following (Small wins/losses, Massive winners) |
 | **Max Drawdown** | **16.84%** | ⚠️ Managed Aggressive Risk |
-| **Total Trades** | **246** | ⚡ High Frequency (~4 trades/day) |
+| **Total Trades** | **246** | ⚡ Low Frequency (~2 trades/3 days) |
 
 ---
 
