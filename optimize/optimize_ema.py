@@ -10,26 +10,33 @@ from config import (
     VOLUME_MA_LENGTH
 )
 
-def run_simulation(ema_len, df_final):
+import itertools
+
+def run_simulation(params, df_final):
     """
-    Run simulation with a specific EMA length.
-    We need to recalculate EMA for each iteration.
+    Run simulation with a specific combination of EMA length, SuperTrend Length, and Factor.
     """
-    # Working on a copy to avoid side effects (though MP serialization usually handles this)
+    ema_len, st_len, st_fac = params
+    
+    # Working on a copy
     df_st = df_final.copy()
     
-    # Calculate EMA with custom length
-    # Note: df_final already has standard indicators, but we need specific EMA len
+    # Calculate EMA
     df_st = DataProcessor.calculate_ema(df_st, length=ema_len)
     
-    # The new column is f'EMA_{ema_len}'
-    # We map it to 'EMA_FILTER' which simulate uses if present
+    # Calculate SuperTrend with specific params
+    df_st = DataProcessor.calculate_supertrend(df_st, length=st_len, multiplier=st_fac)
+    
+    # Map EMA to filter column
     df_st['EMA_FILTER'] = df_st[f'EMA_{ema_len}']
     
-    res, _ = simulate(df_st)
+    # Pass parameters to simulate
+    res, _ = simulate(df_st, st_length=st_len, st_factor=st_fac)
     
     return {
         'ema_length': ema_len,
+        'st_length': st_len,
+        'st_factor': st_fac,
         'pnl_pct': res['pnl_pct'],
         'win_rate': res['win_rate'],
         'pf': res['profit_factor'],
@@ -38,34 +45,41 @@ def run_simulation(ema_len, df_final):
     }
 
 def run_optimization():
-    optimizer = BaseOptimizer("EMA Length Optimization")
+    optimizer = BaseOptimizer("EMA & SuperTrend Optimization")
     
     print(f"Base Settings: ADX>{ADX_THRESHOLD}, RSI<{RSI_OVERBOUGHT}/>{RSI_OVERSOLD}, Vol MA>{VOLUME_MA_LENGTH}")
     
     if not optimizer.load_and_prepare_data():
         return
 
-    # Define range for EMA Length
-    # Testing from 90 to 110 with step of 1 (as per previous file content, simplified)
-    # You can expand this range if needed
-    ema_lengths = np.arange(85, 115, 1)
+    # Define ranges
+    ema_lengths = np.arange(106, 108, 1)
+    st_lengths = np.arange(15, 18, 1)
+    st_factors = np.arange(1.4, 1.51, 0.01)
     
-    tasks = [(length,) for length in ema_lengths]
+    # Create combinations
+    combinations = list(itertools.product(ema_lengths, st_lengths, st_factors))
+    
+    tasks = [(c,) for c in combinations]
     
     results = optimizer.run_parallel(tasks, run_simulation)
     
-    opt_df = optimizer.save_and_analyze(results, "optimization_results_ema.csv")
+    opt_df = optimizer.save_and_analyze(results, "optimization_results_ema_st.csv")
     
     if opt_df is not None and not opt_df.empty:
         # Recommend the best overall (Balance MDD and PnL)
-        best_overall = opt_df[opt_df['mdd'] < 20].sort_values(by='pnl_pct', ascending=False).head(1)
+        print("\n🔍 Findings (MDD < 20%):")
+        valid_mdd = opt_df[opt_df['mdd'] < 20]
         
-        if not best_overall.empty:
-            print("\n🌟 RECOMMENDED EMA LENGTH:")
-            print(best_overall.to_string(index=False))
+        if not valid_mdd.empty:
+            print("\n🌟 BEST BY PNL:")
+            print(valid_mdd.sort_values(by='pnl_pct', ascending=False).head(3).to_string(index=False))
+            
+            print("\n🛡️ BEST BY PROFIT FACTOR:")
+            print(valid_mdd.sort_values(by='pf', ascending=False).head(3).to_string(index=False))
         else:
             print("\n⚠️ No configuration found with MDD < 20%. Showing best by PnL:")
-            print(opt_df.sort_values(by='pnl_pct', ascending=False).head(1).to_string(index=False))
+            print(opt_df.sort_values(by='pnl_pct', ascending=False).head(3).to_string(index=False))
 
 if __name__ == "__main__":
     run_optimization()

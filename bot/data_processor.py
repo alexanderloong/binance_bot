@@ -99,10 +99,8 @@ class DataProcessor:
         return df
 
     @staticmethod
-    def calculate_supertrend(df):
+    def calculate_supertrend(df, length=SUPERTREND_LENGTH, multiplier=SUPERTREND_FACTOR):
         # Manual SuperTrend Implementation
-        length = SUPERTREND_LENGTH
-        multiplier = SUPERTREND_FACTOR
         
         df = df.copy()
         # SuperTrend usually uses HA candles if passed, or standard ones.
