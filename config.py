@@ -32,7 +32,7 @@ RSI_OVERSOLD = 35
 VOLUME_MA_LENGTH = 147
 
 # Partial Take Profit Settings
-PARTIAL_TP_ENABLED = True
+PARTIAL_TP_ENABLED = False
 PARTIAL_TP_MULTIPLIER = 5.3   # Take profit at 2.0x ATR
 PARTIAL_TP_PERCENT = 0.1      # Close 50% of position
 

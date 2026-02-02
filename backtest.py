@@ -162,12 +162,25 @@ def simulate(df, use_ema_filter=True, st_length=SUPERTREND_LENGTH, st_factor=SUP
         trades.append({'time': df.iloc[-1]['timestamp'], 'type': 'FINAL_CLOSE', 'price': last_price, 'pnl': pnl})
 
     # Stats calculation
-    # Count only closed trades for win rate
-    closed_trades = [t for t in trades if any(x in t['type'] for x in ['CLOSE', 'STOP_LOSS', 'PARTIAL_TP'])]
-    total_trades_count = len(closed_trades)
+    # Aggregate trades into cycles to get accurate Win Rate independent of Partial TPs
+    trade_cycles = []
+    current_trade_pnl = 0
+    is_open = False
     
-    # Win = PnL > 0 (Fee is already included in PnL)
-    wins = sum(1 for t in closed_trades if t['pnl'] > 0)
+    for t in trades:
+        if 'OPEN' in t['type']:
+            current_trade_pnl = t['pnl'] # Entry fee
+            is_open = True
+        elif 'PARTIAL_TP' in t['type']:
+            current_trade_pnl += t['pnl']
+        elif any(x in t['type'] for x in ['CLOSE', 'STOP_LOSS', 'FINAL_CLOSE']):
+            current_trade_pnl += t['pnl']
+            if is_open:
+                trade_cycles.append(current_trade_pnl)
+                is_open = False
+    
+    total_trades_count = len(trade_cycles)
+    wins = sum(1 for pnl in trade_cycles if pnl > 0)
     win_rate = (wins / total_trades_count * 100) if total_trades_count > 0 else 0
     pnl_total = balance - initial_balance
     pnl_pct = (pnl_total / initial_balance) * 100
@@ -184,10 +197,9 @@ def simulate(df, use_ema_filter=True, st_length=SUPERTREND_LENGTH, st_factor=SUP
             drawdown = (peak - curr_equity) / peak
             mdd = max(mdd, drawdown)
 
-    # Profit Factor
-    all_pnls = [t['pnl'] for t in trades if 'pnl' in t]
-    gross_profit = sum(p for p in all_pnls if p > 0)
-    gross_loss = abs(sum(p for p in all_pnls if p < 0))
+    # Profit Factor based on Trade Cycles (Net PnL per trade)
+    gross_profit = sum(p for p in trade_cycles if p > 0)
+    gross_loss = abs(sum(p for p in trade_cycles if p < 0))
     profit_factor = (gross_profit / gross_loss) if gross_loss > 0 else (float('inf') if gross_profit > 0 else 0)
 
     return {
