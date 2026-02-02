@@ -29,7 +29,7 @@ RSI_OVERBOUGHT = 66
 RSI_OVERSOLD = 35
 
 # Volume MA Filter Settings
-VOLUME_MA_LENGTH = 55
+VOLUME_MA_LENGTH = 147
 
 # Partial Take Profit Settings
 PARTIAL_TP_ENABLED = True
