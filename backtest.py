@@ -19,6 +19,7 @@ def simulate(df, use_ema_filter=True, st_length=SUPERTREND_LENGTH, st_factor=SUP
     balance = initial_balance
     position_amt = 0 
     entry_price = 0
+    liquidation_price = 0
     stop_loss_price = 0
     partial_tp_hit = False
     take_profit_price = 0
@@ -49,6 +50,39 @@ def simulate(df, use_ema_filter=True, st_length=SUPERTREND_LENGTH, st_factor=SUP
             tf_seconds = parse_timeframe_to_seconds(TIMEFRAME)
             execution_time = timestamp + pd.Timedelta(seconds=tf_seconds)
         
+
+        # 0. LIQUIDATION CHECK
+        if position_amt != 0:
+            # Liquidation threshold: 100/Leverage % move against position
+            # Simply: Check if price hits Liquidation Price
+            # Used Entry Price for reference. 
+            
+            liq_hit = False
+            if position_amt > 0: # Long
+                if current_candle['low'] <= liquidation_price:
+                    liq_hit = True
+                    liq_price_trigger = liquidation_price
+            else: # Short
+                if current_candle['high'] >= liquidation_price:
+                    liq_hit = True
+                    liq_price_trigger = liquidation_price
+            
+            if liq_hit:
+                # Liquidated!
+                # Loss = Margin Collateral. 
+                # Margin = Trade Value / Leverage
+                # Effective PnL = -Margin
+                # Actually, in cross margin, you lose more, but here we assume isolated risk per trade for simplicity 
+                # or just max loss equal to initial margin assigned.
+                
+                margin_lost = (abs(position_amt) * entry_price) / leverage
+                pnl = -margin_lost
+                balance += pnl # Deduct margin
+                
+                trades.append({'time': execution_time, 'type': 'LIQUIDATION', 'price': liq_price_trigger, 'pnl': pnl})
+                position_amt = 0
+                continue # Skip other exit checks
+
         # 1. EXIT LOGIC
         pnl = 0
         fee = 0
@@ -138,6 +172,14 @@ def simulate(df, use_ema_filter=True, st_length=SUPERTREND_LENGTH, st_factor=SUP
             position_amt = amount if signal == 'LONG' else -amount
             entry_price = price
             
+            # Calculate Liquidation Price (Bankruptcy Price approximation)
+            # Long Liq = Entry * (1 - 1/Leverage)
+            # Short Liq = Entry * (1 + 1/Leverage)
+            if signal == 'LONG':
+                liquidation_price = entry_price * (1 - 1/leverage)
+            else:
+                liquidation_price = entry_price * (1 + 1/leverage)
+            
             # Set Dynamic Stop Loss based on ATR
             atr_val = current_candle['ATR']
             if signal == 'LONG':
@@ -173,7 +215,7 @@ def simulate(df, use_ema_filter=True, st_length=SUPERTREND_LENGTH, st_factor=SUP
             is_open = True
         elif 'PARTIAL_TP' in t['type']:
             current_trade_pnl += t['pnl']
-        elif any(x in t['type'] for x in ['CLOSE', 'STOP_LOSS', 'FINAL_CLOSE']):
+        elif any(x in t['type'] for x in ['CLOSE', 'STOP_LOSS', 'FINAL_CLOSE', 'LIQUIDATION']):
             current_trade_pnl += t['pnl']
             if is_open:
                 trade_cycles.append(current_trade_pnl)
