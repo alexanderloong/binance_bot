@@ -25,7 +25,7 @@ ATR_MULTIPLIER = 0.9          # ATR multiplier for Stop Loss (Proposed: 1.5 - 2.
 
 # RSI Filter Settings
 RSI_LENGTH = 14
-RSI_OVERBOUGHT = 66
+RSI_OVERBOUGHT = 65
 RSI_OVERSOLD = 35
 
 # Volume MA Filter Settings

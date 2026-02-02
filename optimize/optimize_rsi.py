@@ -31,8 +31,8 @@ def run_optimization():
     # Define range for RSI Thresholds
     # Overbought: 60 to 85, steps of 2
     # Oversold: 15 to 40, steps of 2
-    rsi_ob_range = np.arange(60, 86, 2)
-    rsi_os_range = np.arange(15, 41, 2)
+    rsi_ob_range = np.arange(60, 71, 1)
+    rsi_os_range = np.arange(30, 41, 1)
     
     tasks = []
     for ob in rsi_ob_range:
