@@ -24,14 +24,14 @@ TIMEFRAME = "15m"             # Timeframe: 15m (Balance between noise and trend)
 
 # Trend Indicators
 # Optimized for capturing major swings while filtering chop
-SUPERTREND_LENGTH = 16        # Length for ATR calculation in SuperTrend
-SUPERTREND_FACTOR = 1.45      # Multiplier for Band width (1.45 offers tight trail)
-EMA_LENGTH = 106              # EMA Baseline (Price > EMA = Bullish)
+SUPERTREND_LENGTH = 18        # Length for ATR calculation in SuperTrend
+SUPERTREND_FACTOR = 1.5      # Multiplier for Band width (1.45 offers tight trail)
+EMA_LENGTH = 102              # EMA Baseline (Price > EMA = Bullish)
 
 # Risk Management
 # High Leverage / Controlled Drawdown approach
-LEVERAGE = 15                 # Leverage 15x
-POSITION_SIZE_PERCENT = 0.25  # Allocating 25% of Equity per Trade
+LEVERAGE = 1                 # Leverage 15x
+POSITION_SIZE_PERCENT = 1  # Allocating 25% of Equity per Trade
 
 # Safety
 MAX_TRADES_PER_HOUR = 5       # API Rate Limit Protection
