@@ -2,6 +2,8 @@
 
 This directory contains individual optimization scripts for each parameter of the trading strategy.
 
+> **Version:** 1.11.0 | **Updated:** 2026-02-03
+
 ## 📁 Individual Parameter Optimization Files
 
 ### Trend Indicators
@@ -16,8 +18,7 @@ This directory contains individual optimization scripts for each parameter of th
 - **optimize_rsi_oversold.py** - Optimizes RSI oversold threshold
 
 ### Risk Management
-- **optimize_atr.py** - Optimizes ATR-based stop loss
-- **optimize_tp.py** - Optimizes take profit settings
+- **optimize_atr.py** - Optimizes ATR-based stop loss multiplier
 - **optimize_leverage.py** - Optimizes leverage and position sizing
 
 ## 📊 Combined Optimization Files (Legacy)
@@ -40,6 +41,9 @@ python optimize/optimize_ema.py
 
 # Example: Optimize ADX threshold
 python optimize/optimize_adx.py
+
+# Example: Optimize ATR Stop Loss
+python optimize/optimize_atr.py
 ```
 
 ## 📝 Notes
@@ -51,7 +55,24 @@ python optimize/optimize_adx.py
 
 ## 🎯 Optimization Workflow
 
-1. Start with trend indicators (EMA, SuperTrend)
-2. Then optimize filters (ADX, Volume, RSI)
-3. Finally tune risk management (ATR, TP, Leverage)
+1. Start with trend indicators (EMA, SuperTrend Length, SuperTrend Factor)
+2. Then optimize filters (ADX, Volume, RSI Overbought, RSI Oversold)
+3. Finally tune risk management (ATR Stop Loss, Leverage)
 4. Update `config.py` with optimal values after each step
+
+## 📈 Current Optimized Settings (v1.11.0)
+
+| Parameter | Value | Description |
+|-----------|-------|-------------|
+| EMA_LENGTH | 102 | Trend baseline |
+| SUPERTREND_LENGTH | 18 | SuperTrend ATR period |
+| SUPERTREND_FACTOR | 1.5 | SuperTrend multiplier |
+| ADX_THRESHOLD | 18 | Minimum trend strength |
+| VOLUME_MA_LENGTH | 177 | Volume filter period |
+| RSI_OVERBOUGHT | 64 | Long entry limit |
+| RSI_OVERSOLD | 36 | Short entry limit |
+| ATR_MULTIPLIER | 0.8 | Stop loss distance |
+
+## ⚠️ Removed Features
+
+- **Partial Take Profit** - Removed in v1.11.0 (not suitable for pure trend following strategy)

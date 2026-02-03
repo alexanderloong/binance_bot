@@ -3,39 +3,40 @@
  All notable changes to this project will be documented in this file.
  
 ## [1.11.0] - 2026-02-03
+### Changed
+- **Strategy Shift:** Transitioned to **Pure Trend Following** strategy.
+    - **Removed Partial Take Profit:** Disabled and removed all TP logic. Strategy now rides trends until reversal signal.
+    - Exit is now purely based on SuperTrend flip or ATR-based Stop Loss.
+
+### Optimized
+- **Fine-tuned Parameters:** Re-optimized all parameters for pure trend following:
+    - **EMA Length:** 106 → **102**
+    - **SuperTrend:** 16/1.45 → **18/1.5**
+    - **ADX Threshold:** 19 → **18**
+    - **ATR Multiplier:** 0.9 → **0.8** (tighter stop loss)
+    - **RSI Range:** 35-65 → **36-64**
+    - **Volume MA:** 147 → **177**
+
 ### Added
-- **Smart Backtest Engine:**
-    - **Custom Fetch Limit:** Users can now specify the exact number of candles to backtest (default: 220,000, max supported by history: ~250,000).
-    - **Safety Mode:** Completely rewrote the downloader with a "Safety Fuse" that pre-calculates API weight consumption. Aborts automatically if configuration exceeds 2000 weight/min to prevent IP bans.
-    - **Rate Limit Resilience:** Added smart retry logic that respects Binance's `Retry-After` header.
-    - **Safe Multi-threading:** Introduced `WORKERS` and `SLEEP` control to balance speed and safety (Default: 5 workers, 1.5s delay).
+- **Modular Optimization Scripts:** Split combined optimizers into individual parameter files:
+    - `optimize_ema.py` - EMA length only
+    - `optimize_supertrend_length.py` - SuperTrend ATR length only
+    - `optimize_supertrend_factor.py` - SuperTrend multiplier only
+    - `optimize_adx.py` - ADX threshold only
+    - `optimize_volume.py` - Volume MA length only
+    - `optimize_rsi_overbought.py` - RSI overbought only
+    - `optimize_rsi_oversold.py` - RSI oversold only
 
-### Changed
-- **Strategy Config:**
-    - **Partial Take Profit:** Re-enabled for consistent gains.
-        - Multiplier: **2.0x ATR** (previously disabled/high).
-        - Percentage: **20%** of position size.
+### Removed
+- **Partial TP Files:** Deleted `optimize_tp.py`, `optimize_tp_multiplier.py`, `optimize_tp_percent.py`
+- **Config Cleanup:** Removed `PARTIAL_TP_ENABLED`, `PARTIAL_TP_MULTIPLIER`, `PARTIAL_TP_PERCENT` from config
 
-## [1.10.0] - 2026-02-02
-### Changed
-- **Optimization**: Updated strategy parameters based on extensive backtesting for optimal Trend Following performance.
-    - Leverage: Increased to 15x.
-    - Position Size: Increased to 25% of balance.
-    - EMA Length: 106
-    - SuperTrend: 16 / 1.45 (Factor)
-    - RSI Range: 35 - 65
-    - Volume MA: 147
-- **Logic Update**: 
-    - Disabled Partial Take Profit to maximize Profit Factor (let profits run).
-    - Updated Win Rate calculation in backtest to correctly count Entry->Exit cycles instead of individual TP events.
-    - Added Liquidation Check in backtest logic (though not triggered with current robust> **Latest Version:** 1.11.0  
-> **Target:** BTC/USDT Perpetual  
-> **Performance:** ~6617% PnL (Backtest 2020-2026)
-- Profit Factor: 1.80
-- Max Drawdown: ~16.8%
-- Win Rate: 39% (Real Win Rate without partial TP inflation)
+### Performance (Current Config)
+- **Total PnL:** **169.45%**
+- **Profit Factor:** **1.34**
+- **Max Drawdown:** **13.15%**
+- **Win Rate:** 26.7% (1058 trades)
 
-![Performance Summary v1.10.0](resource/performance_summary_v1.10.0.png)
 
 ## [1.9.2] - 2026-01-31
 ### Added
