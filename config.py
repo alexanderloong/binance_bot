@@ -58,10 +58,4 @@ VOLUME_MA_LENGTH = 177        # Long-term Volume MA to detect anomalous activity
 # EXIT SETTINGS
 # ------------------------------------------
 # Pure Trend Following: No Partial TP, ride until reversal.
-PARTIAL_TP_ENABLED = False
-PARTIAL_TP_MULTIPLIER = 2   
-PARTIAL_TP_PERCENT = 0.2
-
-# Protection Settings
 # Stop Loss is handled dynamically by ATR logic in bot
-
