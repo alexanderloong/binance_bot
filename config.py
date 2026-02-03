@@ -42,7 +42,7 @@ ADX_LENGTH = 14
 ADX_THRESHOLD = 18            # Trend Strength (Buy only if ADX > 19)
 
 ATR_LENGTH = 14
-ATR_MULTIPLIER = 0.9          # Tight SL (0.9x ATR) to cut losses fast
+ATR_MULTIPLIER = 0.8          # Tight SL (0.9x ATR) to cut losses fast
 
 # Momentum (RSI)
 # Avoid entering at extreme exhaustion points
