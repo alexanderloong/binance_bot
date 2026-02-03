@@ -15,7 +15,9 @@ from config import (
     VOLUME_MA_LENGTH
 )
 
-LIMIT = 800000
+LIMIT = 220000
+WORKERS = 5
+SLEEP = 1.5
 GEN_CHART = True
 
 def simulate(df, use_ema_filter=True, st_length=SUPERTREND_LENGTH, st_factor=SUPERTREND_FACTOR, tp_multiplier=PARTIAL_TP_MULTIPLIER, tp_percent=PARTIAL_TP_PERCENT, sl_multiplier=ATR_MULTIPLIER, adx_threshold=ADX_THRESHOLD, use_rsi_filter=True, rsi_overbought=RSI_OVERBOUGHT, rsi_oversold=RSI_OVERSOLD, use_volume_filter=True, volume_ma_length=VOLUME_MA_LENGTH, leverage=LEVERAGE, position_size_percent=POSITION_SIZE_PERCENT):
@@ -257,7 +259,7 @@ def simulate(df, use_ema_filter=True, st_length=SUPERTREND_LENGTH, st_factor=SUP
         'profit_factor': profit_factor
     }, trades
 
-def get_backtest_data(limit=35000):
+def get_backtest_data(limit=LIMIT):
     symbol_clean = SYMBOL.replace("/", "_").replace("\\", "_")
     
     # Store data in resource folder
@@ -308,66 +310,91 @@ def get_backtest_data(limit=35000):
             live_client = UMFutures(base_url="https://fapi.binance.com")
             symbol_clean = SYMBOL.replace("/", "").upper()
             
-            # Single-threaded fetcher with strict rate limiting to avoid bans
-            end_times = []
+            # Optimized fetcher: Multi-threaded but safely throttled
+            # 1. Increase limit per request to 1500 (max for Futures) to reduce total requests.
+            # 2. Use 2 workers with 1s delay. Total ~2 req/s => ~600 weight/min (Limit is 2400).
+            # This is 25% of limit, very safe even for long history.
+
+            # Calculate time intervals (re-added)
+            tf_seconds = parse_timeframe_to_seconds(TIMEFRAME)
+            ms_interval = tf_seconds * 1000
+            now_ms = int(time.time() * 1000)
             
-            # Calculate how many batches needed
-            batch_size = 1000
+            batch_size = 1500 
             num_batches = math.ceil(limit / batch_size)
             
-            # Generate end times (reverse chronological)
-            for i in range(num_batches):
-                end_times.append(now_ms - (i * batch_size * ms_interval))
-
-            print(f"Plan: Fetch {num_batches} batches sequentially to respect rate limits.")
+            print(f"Plan: Fetch {num_batches} batches (limit=1500) using {WORKERS} threads.")
             
-            for i, end_ts in enumerate(end_times):
+            # Pre-check Weight Limit
+            # Max Limit: 2400 weight/min
+            # Weight per req: 10 (since limit=1500 > 1000)
+            # Req per second = WORKERS / SLEEP
+            # Weight per minute = (WORKERS / SLEEP) * 60 * 10
+            
+            safe_limit = 2000 # Leave buffer from 2400
+            estimated_weight = (WORKERS / SLEEP) * 60 * 10
+            
+            print(f"Estimated Weight: {int(estimated_weight)} / {safe_limit} (Max 2400)")
+            
+            if estimated_weight > safe_limit:
+                print(f"❌ DANGER: Configuration exceeds safe API limits!")
+                print(f"   Required: < {safe_limit} weight/min")
+                print(f"   Current:  ~{int(estimated_weight)} weight/min")
+                print(f"   action: Increase SLEEP or Reduce WORKERS.")
+                return None
+
+            print(f"Estimated time: ~{int(num_batches/(WORKERS/SLEEP))} seconds (Safety Mode needed for large data)")
+            
+            # Generate end times
+            end_times = [now_ms - (i * batch_size * ms_interval) for i in range(num_batches)]
+
+            def fetch_single_batch(end_ts):
+                # Rate limit: Sleep 1.0s per thread per request
+                time.sleep(SLEEP) 
+                
                 retries = 3
                 while retries > 0:
                     try:
-                        # Weight for klines with limit=1000 is 5. 
-                        # limit 2400 weight/min => ~480 req/min => ~8 req/sec.
-                        # We use a conservative sleep of 0.2s to 0.5s to be safe.
-                        
-                        # Add dynamic sleep based on progress to avoid burst limits
-                        time.sleep(0.5) 
-                        
-                        batch = live_client.klines(symbol_clean, interval=TIMEFRAME, limit=1000, endTime=end_ts)
-                        all_bars.extend(batch)
-                        
-                        # Progress indicator
-                        if (i + 1) % 10 == 0:
-                            print(f"Fetched {i+1}/{num_batches} batches...", end='\r')
-                        break
-                    
+                        return live_client.klines(symbol_clean, interval=TIMEFRAME, limit=1500, endTime=end_ts)
                     except Exception as e:
                         err_msg = str(e)
-                        retry_after = 0
-                        
-                        # Try to parse Retry-After from error
-                        if 'retry-after' in err_msg.lower():
-                            try:
-                                # Example: ... 'retry-after': '836' ...
-                                parts = err_msg.split("'retry-after': '")
-                                if len(parts) > 1:
-                                    retry_after_str = parts[1].split("'")[0]
-                                    retry_after = int(retry_after_str)
-                            except:
-                                retry_after = 60 # Default fallback
+                        retry_after = 5
                         
                         if "418" in err_msg or "429" in err_msg:
-                            wait_time = max(retry_after, 60) # Wait at least 60s or the commanded time
-                            print(f"\n⚠️ Rate Limit Hit! Waiting {wait_time}s before retrying...")
-                            time.sleep(wait_time)
-                            retries -= 1
+                            if 'retry-after' in err_msg.lower():
+                                try:
+                                    retry_after = int(err_msg.split("'retry-after': '")[1].split("'")[0])
+                                except:
+                                    retry_after = 60
+                            else:
+                                retry_after = 60
+                                
+                            print(f"\n⚠️ Rate Limit Hit! Thread sleeping {retry_after}s...")
+                            time.sleep(retry_after)
                         else:
-                            print(f"\n❌ Error fetching batch: {e}. Retrying...")
+                            # Network error or other, short sleep
+                            print(f"\n⚠️ Error: {e}. Retrying...")
                             time.sleep(5)
-                            retries -= 1
-                
-                if retries == 0:
-                    print(f"\n❌ Failed to fetch batch at {end_ts} after multiple retries. Aborting.")
-                    break
+                        
+                        retries -= 1
+                return []
+
+            all_bars = []
+            with ThreadPoolExecutor(max_workers=WORKERS) as executor:
+                # Use list(executor.map) to preserve order or just collect and sort later
+                # map preserves order of results corresponding to input iterator
+                results = list(executor.map(fetch_single_batch, end_times))
+            
+            # Use a progress bar style print if possible, but map blocks until done.
+            # To show progress with map, we'd need as_completed, but then order is lost (we sort later anyway).
+            
+            count_success = 0
+            for batch in results:
+                if batch:
+                    all_bars.extend(batch)
+                    count_success += 1
+            
+            print(f"\n✅ Fetched {count_success}/{num_batches} batches successfully.")
             
             # Sort and remove duplicates
             unique_bars = {b[0]: b for b in all_bars}

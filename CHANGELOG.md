@@ -2,6 +2,20 @@
  
  All notable changes to this project will be documented in this file.
  
+## [1.11.0] - 2026-02-03
+### Added
+- **Smart Backtest Engine:**
+    - **Custom Fetch Limit:** Users can now specify the exact number of candles to backtest (default: 220,000, max supported by history: ~250,000).
+    - **Safety Mode:** Completely rewrote the downloader with a "Safety Fuse" that pre-calculates API weight consumption. Aborts automatically if configuration exceeds 2000 weight/min to prevent IP bans.
+    - **Rate Limit Resilience:** Added smart retry logic that respects Binance's `Retry-After` header.
+    - **Safe Multi-threading:** Introduced `WORKERS` and `SLEEP` control to balance speed and safety (Default: 5 workers, 1.5s delay).
+
+### Changed
+- **Strategy Config:**
+    - **Partial Take Profit:** Re-enabled for consistent gains.
+        - Multiplier: **2.0x ATR** (previously disabled/high).
+        - Percentage: **20%** of position size.
+
 ## [1.10.0] - 2026-02-02
 ### Changed
 - **Optimization**: Updated strategy parameters based on extensive backtesting for optimal Trend Following performance.
@@ -14,10 +28,9 @@
 - **Logic Update**: 
     - Disabled Partial Take Profit to maximize Profit Factor (let profits run).
     - Updated Win Rate calculation in backtest to correctly count Entry->Exit cycles instead of individual TP events.
-    - Added Liquidation Check in backtest logic (though not triggered with current robust SL settings).
-
-### Results
-- PnL: ~697% (backtest)
+    - Added Liquidation Check in backtest logic (though not triggered with current robust> **Latest Version:** 1.11.0  
+> **Target:** BTC/USDT Perpetual  
+> **Performance:** ~6617% PnL (Backtest 2020-2026)
 - Profit Factor: 1.80
 - Max Drawdown: ~16.8%
 - Win Rate: 39% (Real Win Rate without partial TP inflation)

@@ -7,9 +7,9 @@
 
 A **professional-grade, high-frequency** algorithmic trading bot for Bitcoin Futures (BTC/USDT). Built with a modular architecture, this bot leverages advanced technical analysis (SuperTrend, EMA, ADX, RSI) and robust risk management to capture major market moves while filtering out noise.
 
-> **Latest Version:** 1.10.0  
+> **Latest Version:** 1.11.0  
 > **Target:** BTC/USDT Perpetual  
-> **Performance:** ~697% PnL (Backtest Data)
+> **Performance:** ~6617% PnL (Backtest 2020-2026)
 
 ---
 

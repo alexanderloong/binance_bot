@@ -22,8 +22,8 @@ def run_optimization():
         return
 
     # Define grid
-    multipliers = np.arange(5.0, 10, 0.1) # 1.0 to 5.0
-    percentages = np.arange(0.1, 0.2, 0.1) # 0.1 to 0.9
+    multipliers = np.arange(1.0, 5, 1) # 1.0 to 5.0
+    percentages = np.arange(0.1, 1.0, 0.1) # 0.1 to 0.9
     
     tasks = []
     for tp_mult in multipliers:
