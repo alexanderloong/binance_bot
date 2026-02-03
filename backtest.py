@@ -15,7 +15,7 @@ from config import (
     VOLUME_MA_LENGTH
 )
 
-LIMIT = 1000000
+LIMIT = 800000
 GEN_CHART = True
 
 def simulate(df, use_ema_filter=True, st_length=SUPERTREND_LENGTH, st_factor=SUPERTREND_FACTOR, tp_multiplier=PARTIAL_TP_MULTIPLIER, tp_percent=PARTIAL_TP_PERCENT, sl_multiplier=ATR_MULTIPLIER, adx_threshold=ADX_THRESHOLD, use_rsi_filter=True, rsi_overbought=RSI_OVERBOUGHT, rsi_oversold=RSI_OVERSOLD, use_volume_filter=True, volume_ma_length=VOLUME_MA_LENGTH, leverage=LEVERAGE, position_size_percent=POSITION_SIZE_PERCENT):
@@ -308,38 +308,66 @@ def get_backtest_data(limit=35000):
             live_client = UMFutures(base_url="https://fapi.binance.com")
             symbol_clean = SYMBOL.replace("/", "").upper()
             
-            # Multi-threaded fetcher
-            def fetch_batch(end_ts):
-                time.sleep(1.0) # Rate limiting: 1s delay per thread
-                try:
-                    return live_client.klines(symbol_clean, interval=TIMEFRAME, limit=1000, endTime=end_ts)
-                except Exception as e:
-                    if "418" in str(e) or "429" in str(e):
-                        print(f"⚠️ RATE LIMIT HIT! Pausing for 30s... (Batch: {end_ts})")
-                        time.sleep(30)
-                    else:
-                        print(f"Error fetching batch at {end_ts}: {e}")
-                    return []
-
-            # Calculate time intervals for requested candles
-            tf_seconds = parse_timeframe_to_seconds(TIMEFRAME)
-            ms_interval = tf_seconds * 1000
+            # Single-threaded fetcher with strict rate limiting to avoid bans
+            end_times = []
             
-            now_ms = int(time.time() * 1000)
-            
+            # Calculate how many batches needed
             batch_size = 1000
             num_batches = math.ceil(limit / batch_size)
             
-            # Generate end times for batches
-            end_times = [now_ms - (i * batch_size * ms_interval) for i in range(num_batches)]
+            # Generate end times (reverse chronological)
+            for i in range(num_batches):
+                end_times.append(now_ms - (i * batch_size * ms_interval))
+
+            print(f"Plan: Fetch {num_batches} batches sequentially to respect rate limits.")
             
-            all_bars = []
-            # Reduced workers to avoid ban (max weight ~1200/min)
-            with ThreadPoolExecutor(max_workers=2) as executor:
-                results = list(executor.map(fetch_batch, end_times))
-            
-            for batch in results:
-                all_bars.extend(batch)
+            for i, end_ts in enumerate(end_times):
+                retries = 3
+                while retries > 0:
+                    try:
+                        # Weight for klines with limit=1000 is 5. 
+                        # limit 2400 weight/min => ~480 req/min => ~8 req/sec.
+                        # We use a conservative sleep of 0.2s to 0.5s to be safe.
+                        
+                        # Add dynamic sleep based on progress to avoid burst limits
+                        time.sleep(0.5) 
+                        
+                        batch = live_client.klines(symbol_clean, interval=TIMEFRAME, limit=1000, endTime=end_ts)
+                        all_bars.extend(batch)
+                        
+                        # Progress indicator
+                        if (i + 1) % 10 == 0:
+                            print(f"Fetched {i+1}/{num_batches} batches...", end='\r')
+                        break
+                    
+                    except Exception as e:
+                        err_msg = str(e)
+                        retry_after = 0
+                        
+                        # Try to parse Retry-After from error
+                        if 'retry-after' in err_msg.lower():
+                            try:
+                                # Example: ... 'retry-after': '836' ...
+                                parts = err_msg.split("'retry-after': '")
+                                if len(parts) > 1:
+                                    retry_after_str = parts[1].split("'")[0]
+                                    retry_after = int(retry_after_str)
+                            except:
+                                retry_after = 60 # Default fallback
+                        
+                        if "418" in err_msg or "429" in err_msg:
+                            wait_time = max(retry_after, 60) # Wait at least 60s or the commanded time
+                            print(f"\n⚠️ Rate Limit Hit! Waiting {wait_time}s before retrying...")
+                            time.sleep(wait_time)
+                            retries -= 1
+                        else:
+                            print(f"\n❌ Error fetching batch: {e}. Retrying...")
+                            time.sleep(5)
+                            retries -= 1
+                
+                if retries == 0:
+                    print(f"\n❌ Failed to fetch batch at {end_ts} after multiple retries. Aborting.")
+                    break
             
             # Sort and remove duplicates
             unique_bars = {b[0]: b for b in all_bars}
