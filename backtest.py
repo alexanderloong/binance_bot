@@ -15,7 +15,8 @@ from config import (
     VOLUME_MA_LENGTH
 )
 
-LIMIT = 1000
+LIMIT = 1000000
+GEN_CHART = True
 
 def simulate(df, use_ema_filter=True, st_length=SUPERTREND_LENGTH, st_factor=SUPERTREND_FACTOR, tp_multiplier=PARTIAL_TP_MULTIPLIER, tp_percent=PARTIAL_TP_PERCENT, sl_multiplier=ATR_MULTIPLIER, adx_threshold=ADX_THRESHOLD, use_rsi_filter=True, rsi_overbought=RSI_OVERBOUGHT, rsi_oversold=RSI_OVERSOLD, use_volume_filter=True, volume_ma_length=VOLUME_MA_LENGTH, leverage=LEVERAGE, position_size_percent=POSITION_SIZE_PERCENT):
     initial_balance = 1000
@@ -309,10 +310,15 @@ def get_backtest_data(limit=35000):
             
             # Multi-threaded fetcher
             def fetch_batch(end_ts):
+                time.sleep(1.0) # Rate limiting: 1s delay per thread
                 try:
                     return live_client.klines(symbol_clean, interval=TIMEFRAME, limit=1000, endTime=end_ts)
                 except Exception as e:
-                    print(f"Error fetching batch at {end_ts}: {e}")
+                    if "418" in str(e) or "429" in str(e):
+                        print(f"⚠️ RATE LIMIT HIT! Pausing for 30s... (Batch: {end_ts})")
+                        time.sleep(30)
+                    else:
+                        print(f"Error fetching batch at {end_ts}: {e}")
                     return []
 
             # Calculate time intervals for requested candles
@@ -328,7 +334,8 @@ def get_backtest_data(limit=35000):
             end_times = [now_ms - (i * batch_size * ms_interval) for i in range(num_batches)]
             
             all_bars = []
-            with ThreadPoolExecutor(max_workers=10) as executor:
+            # Reduced workers to avoid ban (max weight ~1200/min)
+            with ThreadPoolExecutor(max_workers=2) as executor:
                 results = list(executor.map(fetch_batch, end_times))
             
             for batch in results:
@@ -419,9 +426,10 @@ def run_backtest():
     
     # Generate Performance Summary Plot
     try:
-        from optimize.plot_results import plot_performance
-        print("\nGenerating Performance Chart...")
-        plot_performance(df_final, trades, res)
+        if GEN_CHART:
+            from optimize.plot_results import plot_performance
+            print("\nGenerating Performance Chart...")
+            plot_performance(df_final, trades, res)
     except Exception as e:
         print(f"Could not generate chart: {e}")
 
