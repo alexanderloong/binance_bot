@@ -39,7 +39,7 @@ MAX_TRADES_PER_HOUR = 5       # API Rate Limit Protection
 # Filters
 # Additional conditions to improve Win/Loss Quality
 ADX_LENGTH = 14               
-ADX_THRESHOLD = 19            # Trend Strength (Buy only if ADX > 19)
+ADX_THRESHOLD = 18            # Trend Strength (Buy only if ADX > 19)
 
 ATR_LENGTH = 14
 ATR_MULTIPLIER = 0.9          # Tight SL (0.9x ATR) to cut losses fast
@@ -47,12 +47,12 @@ ATR_MULTIPLIER = 0.9          # Tight SL (0.9x ATR) to cut losses fast
 # Momentum (RSI)
 # Avoid entering at extreme exhaustion points
 RSI_LENGTH = 14
-RSI_OVERBOUGHT = 65           # Long limit
-RSI_OVERSOLD = 35             # Short limit
+RSI_OVERBOUGHT = 64           # Long limit
+RSI_OVERSOLD = 36             # Short limit
 
 # Volume
 # Confirm breakout validity
-VOLUME_MA_LENGTH = 147        # Long-term Volume MA to detect anomalous activity
+VOLUME_MA_LENGTH = 177        # Long-term Volume MA to detect anomalous activity
 
 # ------------------------------------------
 # EXIT SETTINGS

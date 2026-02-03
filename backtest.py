@@ -15,7 +15,7 @@ from config import (
     VOLUME_MA_LENGTH
 )
 
-LIMIT = 150000
+LIMIT = 200000
 WORKERS = 5
 SLEEP = 1.5
 GEN_CHART = True
