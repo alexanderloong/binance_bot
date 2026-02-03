@@ -1,5 +1,6 @@
 import os
 import time
+import math
 from concurrent.futures import ThreadPoolExecutor
 import pandas as pd
 from binance.um_futures import UMFutures
@@ -13,6 +14,8 @@ from config import (
     RSI_LENGTH, RSI_OVERBOUGHT, RSI_OVERSOLD,
     VOLUME_MA_LENGTH
 )
+
+LIMIT = 1000
 
 def simulate(df, use_ema_filter=True, st_length=SUPERTREND_LENGTH, st_factor=SUPERTREND_FACTOR, tp_multiplier=PARTIAL_TP_MULTIPLIER, tp_percent=PARTIAL_TP_PERCENT, sl_multiplier=ATR_MULTIPLIER, adx_threshold=ADX_THRESHOLD, use_rsi_filter=True, rsi_overbought=RSI_OVERBOUGHT, rsi_oversold=RSI_OVERSOLD, use_volume_filter=True, volume_ma_length=VOLUME_MA_LENGTH, leverage=LEVERAGE, position_size_percent=POSITION_SIZE_PERCENT):
     initial_balance = 1000
@@ -253,7 +256,7 @@ def simulate(df, use_ema_filter=True, st_length=SUPERTREND_LENGTH, st_factor=SUP
         'profit_factor': profit_factor
     }, trades
 
-def get_backtest_data():
+def get_backtest_data(limit=35000):
     symbol_clean = SYMBOL.replace("/", "_").replace("\\", "_")
     
     # Store data in resource folder
@@ -283,8 +286,13 @@ def get_backtest_data():
                 df = pd.read_csv(cache_file)
                 if not df.empty:
                     df['timestamp'] = pd.to_datetime(df['timestamp'])
-                    should_fetch = False
-                    print(f"✅ Successfully loaded {len(df)} candles from cache.")
+                    if len(df) < limit:
+                         print(f"⚠️ Cache has {len(df)} candles, but {limit} requested. Fetching fresh data.")
+                         should_fetch = True
+                    else:
+                        should_fetch = False
+                        df = df.iloc[-limit:].copy()
+                        print(f"✅ Successfully loaded {len(df)} candles from cache.")
                 else:
                     print("⚠️ Cache file is empty. Will fetch fresh data.")
             except Exception as e:
@@ -293,7 +301,7 @@ def get_backtest_data():
             print(f"🔄 Cache is stale (Age: {int(file_age)}s >= {tf_seconds}s threshold). Fetching fresh data...")
     
     if should_fetch:
-        print(f"Fetching {35000} historical candles from LIVE Binance (multi-threaded)...")
+        print(f"Fetching {limit} historical candles from LIVE Binance (multi-threaded)...")
         
         try:
             live_client = UMFutures(base_url="https://fapi.binance.com")
@@ -307,13 +315,17 @@ def get_backtest_data():
                     print(f"Error fetching batch at {end_ts}: {e}")
                     return []
 
-            # Calculate time intervals for 35,000 candles
+            # Calculate time intervals for requested candles
             tf_seconds = parse_timeframe_to_seconds(TIMEFRAME)
             ms_interval = tf_seconds * 1000
             
             now_ms = int(time.time() * 1000)
-            # We need 35 batches of 1000
-            end_times = [now_ms - (i * 1000 * ms_interval) for i in range(35)]
+            
+            batch_size = 1000
+            num_batches = math.ceil(limit / batch_size)
+            
+            # Generate end times for batches
+            end_times = [now_ms - (i * batch_size * ms_interval) for i in range(num_batches)]
             
             all_bars = []
             with ThreadPoolExecutor(max_workers=10) as executor:
@@ -328,7 +340,7 @@ def get_backtest_data():
             bars = [unique_bars[ts] for ts in sorted_ts]
             
             # Filter to requested length if needed
-            bars = bars[-35000:]
+            bars = bars[-limit:]
             
             print(f"Successfully fetched {len(bars)} candles.")
 
@@ -356,10 +368,13 @@ def get_backtest_data():
 
 def run_backtest():
     print(f"--- Backtest for {SYMBOL} ({TIMEFRAME}) ---")
+
+    limit = LIMIT
+
     tp_status = f"TP: {PARTIAL_TP_MULTIPLIER}xATR ({PARTIAL_TP_PERCENT*100}%)" if PARTIAL_TP_ENABLED else "TP: Disabled"
     print(f"Strategy: EMA {EMA_LENGTH}, SuperTrend {SUPERTREND_LENGTH}/{SUPERTREND_FACTOR}, ADX > {ADX_THRESHOLD}, SL: {ATR_MULTIPLIER}xATR, {tp_status}")
     
-    df = get_backtest_data()
+    df = get_backtest_data(limit=limit)
     if df is None: return
 
     print(f"Processing {len(df)} candles...")
