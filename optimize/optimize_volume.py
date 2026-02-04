@@ -43,7 +43,7 @@ def run_optimization():
         return
 
     # Define Volume MA length range
-    vol_lengths = np.arange(170, 183, 1)
+    vol_lengths = np.arange(50, 300, 1)
     
     print(f"Testing {len(vol_lengths)} Volume MA lengths...")
     

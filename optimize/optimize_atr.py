@@ -26,7 +26,7 @@ def run_optimization():
 
     # Define range for ATR Multiplier
     # Testing from 0.5 to 5.0 with 0.1 step
-    sl_multipliers = np.arange(0.5, 2.5, 0.1)
+    sl_multipliers = np.arange(0.5, 1.5, 0.01)
     
     tasks = [(sl,) for sl in sl_multipliers]
     

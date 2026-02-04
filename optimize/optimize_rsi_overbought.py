@@ -36,7 +36,7 @@ def run_optimization():
         return
 
     # Define range for RSI Overbought
-    rsi_ob_range = np.arange(55, 86, 1)
+    rsi_ob_range = np.arange(60, 70, 1)
     
     tasks = [(ob,) for ob in rsi_ob_range]
             

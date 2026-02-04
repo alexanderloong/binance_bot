@@ -47,7 +47,7 @@ def run_optimization():
     
     results = optimizer.run_parallel(tasks, run_simulation)
     
-    opt_df = optimizer.save_and_analyze(results, "optimization_results_adx.csv")
+    opt_df = optimizer.save_and_analyze(results, "optimization_results_adx_threshold.csv")
     
     if opt_df is not None and not opt_df.empty:
         # Filter for acceptable drawdown (e.g. < 20%)
