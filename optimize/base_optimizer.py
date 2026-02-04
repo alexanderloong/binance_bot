@@ -79,8 +79,8 @@ class BaseOptimizer:
             return
 
         opt_df = pd.DataFrame(results)
-        opt_df.to_csv(filename, index=False)
-        print(f"\n✅ Results saved to {filename}")
+        opt_df.to_csv("optimize/" + filename, index=False)
+        print(f"\n✅ Results saved to optimize/{filename}")
         
         # Sort by PnL
         if 'pnl_pct' in opt_df.columns:
