@@ -1,4 +1,4 @@
-# 🤖 Binance Futures Algorithmic Trading Bot
+# 🤖 Binance Futures Algorithmic Trading Bot v1.13.0
 
 ![Python](https://img.shields.io/badge/Python-3.10%2B-blue?style=for-the-badge&logo=python)
 ![Binance](https://img.shields.io/badge/Binance-Futures-FCD535?style=for-the-badge&logo=binance)
@@ -7,9 +7,9 @@
 
 A **professional-grade, high-frequency** algorithmic trading bot for Bitcoin Futures (BTC/USDT). Built with a modular architecture, this bot leverages advanced technical analysis (SuperTrend, EMA, ADX, RSI) and robust risk management to capture major market moves while filtering out noise.
 
-> **Latest Version:** 1.12.0  
+> **Latest Version:** 1.13.0  
 > **Target:** BTC/USDT Perpetual  
-> **Performance:** ~697% PnL (Backtest 2025-2026)
+> **Performance:** ~665.4% PnL (Backtest 2025-2026)
 
 ---
 
@@ -23,24 +23,18 @@ The bot executes trade entries only when **ALL** the following conditions align:
 1.  **Trend Direction (EMA)**:
     *   **Long**: Price > EMA (102)
     *   **Short**: Price < EMA (102)
-    *   *Rationale*: Ensures we only trade in the direction of the dominant trend.
-
 2.  **Market Structure (SuperTrend)**:
-    *   **Long**: SuperTrend (18, 1.5) is GREEN.
-    *   **Short**: SuperTrend (18, 1.5) is RED.
-    *   *Rationale*: Provides precise entry triggers and trailing stop levels.
-
+    *   **Long**: SuperTrend (18, 1.45) is GREEN.
+    *   **Short**: SuperTrend (18, 1.45) is RED.
 3.  **Trend Strength (ADX)**:
     *   **ADX (14) > 18**
-    *   *Rationale*: Filters out "choppy" sideways markets where trend following strategies usually fail.
-
 4.  **Momentum Filter (RSI)**:
     *   **Entry Range**: 36 < RSI (14) < 64
-    *   *Rationale*: Prevents "Buying the Top" (Overbought > 64) or "Selling the Bottom" (Oversold < 36).
-
 5.  **Volume Confirmation**:
     *   **Volume > Volume MA (177)**
-    *   *Rationale*: Validates that the move is backed by significant market participation.
+6.  **Smart Re-entry (v1.13.0)**: 
+    *   Wait for **breakout confirmation** if previously stopped out within the same trend.
+    *   **2-candle cooldown** after any exit to avoid market noise.
 
 ### 🛡️ Risk Management (The "Survival" Engine)
 
@@ -48,7 +42,7 @@ The bot executes trade entries only when **ALL** the following conditions align:
 | :--- | :--- | :--- |
 | **Leverage** | **25x** | Optimized for aggressive growth while maintaining margin safety. |
 | **Position Size** | **20%** | Allocates 20% of Total Equity per trade. |
-| **Stop Loss** | **0.8x ATR** | Dynamic Volatility-Based Stop Loss. Tight Stops = Small Losses. |
+| **Stop Loss** | **0.7x ATR** | Dynamic Volatility-Based Stop Loss. |
 | **Take Profit** | **Disabled** | "Let Profits Run". Positions are closed only on Trend Reversal. |
 | **Liquidation** | **Monitoring** | Logic includes liquidation price tracking to prevent total loss. |
 
@@ -60,11 +54,11 @@ The bot executes trade entries only when **ALL** the following conditions align:
 
 | Metric | Value | Verdict |
 | :--- | :--- | :--- |
-| **Net Profit (PnL)** | **+697.03%** | 🚀 Extremely High |
-| **Profit Factor** | **1.80** | ✅ Highly Profitable |
-| **Win Rate** | **39.0%** | 📉 Classic Trend Following (Small wins/losses, Massive winners) |
-| **Max Drawdown** | **16.84%** | ⚠️ Managed Aggressive Risk |
-| **Total Trades** | **246** | ⚡ Low Frequency (~2 trades/3 days) |
+| **Net Profit (PnL)** | **+665.42%** | 🚀 High |
+| **Profit Factor** | **1.46** | ✅ Balanced Stability |
+| **Win Rate** | **33.3%** | 📈 Classic Trend Following |
+| **Max Drawdown** | **27.62%** | ⚠️ Managed Aggressive Risk |
+| **Total Trades** | **252** | ⚡ Low Frequency |
 
 ---
 

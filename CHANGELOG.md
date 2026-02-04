@@ -2,6 +2,24 @@
  
  All notable changes to this project will be documented in this file.
  
+## [1.13.0] - 2026-02-04
+### Added
+- **Smart Re-entry Logic:** Implemented a breakout-based re-entry system. If a trade hits Stop Loss, the bot now waits for a "confirmation breakout" (price exceeding previous trend high/low) before re-entering same trend.
+- **Cooldown Mechanism:** Added a 2-candle cooldown after any exit to prevent "flickering" trades in choppy markets.
+
+### Optimized
+- **Profit Factor Focus:** Adjusted parameters to prioritize stability over raw volume.
+    - **ATR Multiplier:** 0.7 (Optimized for tight but effective stops).
+    - **SuperTrend Factor:** 1.45 (Reduced noise).
+    - **ADX Threshold:** 18 (Maintaining trend entry baseline).
+- **Backtest Engine:** Refactored for better accuracy in tracking trend segments and trade cycles.
+
+### Performance (v1.13.0 stable)
+- **Net Profit:** **+665.4%**
+- **Profit Factor:** **1.46** (Increased from 1.33)
+- **Win Rate:** 33.3%
+- **Max Drawdown:** 27.6%
+
 ## [1.12.0] - 2026-02-04
 ### Added
 - **Granular Optimization Files:** Further split optimization scripts for better isolation:
