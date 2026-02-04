@@ -5,7 +5,7 @@ from base_optimizer import BaseOptimizer
 from backtest import simulate
 from bot.data_processor import DataProcessor
 from config import (
-    PARTIAL_TP_MULTIPLIER, PARTIAL_TP_PERCENT, ATR_MULTIPLIER,
+    ATR_MULTIPLIER,
     VOLUME_MA_LENGTH, RSI_OVERBOUGHT, RSI_OVERSOLD
 )
 
@@ -32,7 +32,7 @@ def run_simulation(adx_th, df_final):
 def run_optimization():
     optimizer = BaseOptimizer("ADX Threshold Optimization")
     
-    print(f"Current Settings: TP Mult: {PARTIAL_TP_MULTIPLIER}, TP%: {PARTIAL_TP_PERCENT}, SL Mult: {ATR_MULTIPLIER}")
+    print(f"Pure Trend Following Strategy - SL Mult: {ATR_MULTIPLIER}")
     print(f"Fixed: Volume MA Length={VOLUME_MA_LENGTH}")
     
     if not optimizer.load_and_prepare_data():

@@ -4,7 +4,7 @@ import pandas as pd
 from base_optimizer import BaseOptimizer
 from backtest import simulate
 from config import (
-    PARTIAL_TP_MULTIPLIER, PARTIAL_TP_PERCENT, ATR_MULTIPLIER, 
+    ATR_MULTIPLIER, 
     ADX_THRESHOLD, RSI_OVERSOLD
 )
 
@@ -29,7 +29,7 @@ def run_simulation(rsi_ob, df_final):
 def run_optimization():
     optimizer = BaseOptimizer("RSI Overbought Threshold Optimization")
     
-    print(f"Current Settings: ADX Th: {ADX_THRESHOLD}, TP Mult: {PARTIAL_TP_MULTIPLIER}, TP%: {PARTIAL_TP_PERCENT}, SL Mult: {ATR_MULTIPLIER}")
+    print(f"Pure Trend Following Strategy - ADX Th: {ADX_THRESHOLD}, SL Mult: {ATR_MULTIPLIER}")
     print(f"Fixed: RSI Oversold={RSI_OVERSOLD}")
     
     if not optimizer.load_and_prepare_data():

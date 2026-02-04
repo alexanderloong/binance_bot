@@ -5,7 +5,7 @@ from base_optimizer import BaseOptimizer
 from backtest import simulate
 from bot.data_processor import DataProcessor
 from config import (
-    ADX_LENGTH, ATR_LENGTH, PARTIAL_TP_MULTIPLIER, PARTIAL_TP_PERCENT, 
+    ADX_LENGTH, ATR_LENGTH, 
     ATR_MULTIPLIER, ADX_THRESHOLD, RSI_LENGTH, RSI_OVERBOUGHT, RSI_OVERSOLD,
     VOLUME_MA_LENGTH, EMA_LENGTH, SUPERTREND_LENGTH
 )

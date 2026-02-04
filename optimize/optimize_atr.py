@@ -3,10 +3,9 @@ import numpy as np
 import pandas as pd
 from base_optimizer import BaseOptimizer
 from backtest import simulate
-from config import PARTIAL_TP_MULTIPLIER, PARTIAL_TP_PERCENT
 
 def run_simulation(sl_mult, df_final):
-    # Use the current best TP settings we found earlier
+    # Pure Trend Following: No Partial TP
     res, _ = simulate(df_final, sl_multiplier=sl_mult)
     return {
         'atr_multiplier': round(sl_mult, 2),
@@ -20,7 +19,7 @@ def run_simulation(sl_mult, df_final):
 def run_optimization():
     optimizer = BaseOptimizer("ATR Multiplier Optimization")
     
-    print(f"Stats: Using TP Multiplier: {PARTIAL_TP_MULTIPLIER}, TP Percent: {PARTIAL_TP_PERCENT}")
+    print("Pure Trend Following Strategy - Optimizing Stop Loss (ATR Multiplier)")
     
     if not optimizer.load_and_prepare_data():
         return
