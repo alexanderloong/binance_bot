@@ -5,14 +5,14 @@ from base_optimizer import BaseOptimizer
 from backtest import simulate
 from bot.data_processor import DataProcessor
 from config import (
-    ATR_MULTIPLIER,
+    ATR_MULTIPLIER, ADX_LENGTH,
     VOLUME_MA_LENGTH, RSI_OVERBOUGHT, RSI_OVERSOLD
 )
 
 def run_simulation(adx_th, df_final):
     """
     Run simulation with a specific ADX threshold.
-    Volume MA length is fixed from config.
+    ADX Length is fixed from config (Calculated in BaseOptimizer).
     """
     # Work on a copy to avoid side effects
     df_wk = df_final.copy()
@@ -33,7 +33,7 @@ def run_optimization():
     optimizer = BaseOptimizer("ADX Threshold Optimization")
     
     print(f"Pure Trend Following Strategy - SL Mult: {ATR_MULTIPLIER}")
-    print(f"Fixed: Volume MA Length={VOLUME_MA_LENGTH}")
+    print(f"Fixed: ADX Length={ADX_LENGTH}, Volume MA Length={VOLUME_MA_LENGTH}")
     
     if not optimizer.load_and_prepare_data():
         return

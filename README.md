@@ -7,9 +7,9 @@
 
 A **professional-grade, high-frequency** algorithmic trading bot for Bitcoin Futures (BTC/USDT). Built with a modular architecture, this bot leverages advanced technical analysis (SuperTrend, EMA, ADX, RSI) and robust risk management to capture major market moves while filtering out noise.
 
-> **Latest Version:** 1.11.0  
+> **Latest Version:** 1.12.0  
 > **Target:** BTC/USDT Perpetual  
-> **Performance:** ~6617% PnL (Backtest 2020-2026)
+> **Performance:** ~697% PnL (Backtest 2025-2026)
 
 ---
 
@@ -21,34 +21,34 @@ This bot operates on a **Trend Following** philosophy. It aims to enter large tr
 The bot executes trade entries only when **ALL** the following conditions align:
 
 1.  **Trend Direction (EMA)**:
-    *   **Long**: Price > EMA (106)
-    *   **Short**: Price < EMA (106)
+    *   **Long**: Price > EMA (102)
+    *   **Short**: Price < EMA (102)
     *   *Rationale*: Ensures we only trade in the direction of the dominant trend.
 
 2.  **Market Structure (SuperTrend)**:
-    *   **Long**: SuperTrend (16, 1.45) is GREEN.
-    *   **Short**: SuperTrend (16, 1.45) is RED.
+    *   **Long**: SuperTrend (18, 1.5) is GREEN.
+    *   **Short**: SuperTrend (18, 1.5) is RED.
     *   *Rationale*: Provides precise entry triggers and trailing stop levels.
 
 3.  **Trend Strength (ADX)**:
-    *   **ADX (14) > 19**
+    *   **ADX (14) > 18**
     *   *Rationale*: Filters out "choppy" sideways markets where trend following strategies usually fail.
 
 4.  **Momentum Filter (RSI)**:
-    *   **Entry Range**: 35 < RSI (14) < 65
-    *   *Rationale*: Prevents "Buying the Top" (Overbought > 65) or "Selling the Bottom" (Oversold < 35).
+    *   **Entry Range**: 36 < RSI (14) < 64
+    *   *Rationale*: Prevents "Buying the Top" (Overbought > 64) or "Selling the Bottom" (Oversold < 36).
 
 5.  **Volume Confirmation**:
-    *   **Volume > Volume MA (147)**
+    *   **Volume > Volume MA (177)**
     *   *Rationale*: Validates that the move is backed by significant market participation.
 
 ### 🛡️ Risk Management (The "Survival" Engine)
 
 | Parameter | Setting | Description |
 | :--- | :--- | :--- |
-| **Leverage** | **15x** | Optimized for aggressive growth while maintaining margin safety. |
-| **Position Size** | **25%** | Allocates 25% of Total Equity per trade. |
-| **Stop Loss** | **0.9x ATR** | Dynamic Volatility-Based Stop Loss. Tight Stops = Small Losses. |
+| **Leverage** | **25x** | Optimized for aggressive growth while maintaining margin safety. |
+| **Position Size** | **20%** | Allocates 20% of Total Equity per trade. |
+| **Stop Loss** | **0.8x ATR** | Dynamic Volatility-Based Stop Loss. Tight Stops = Small Losses. |
 | **Take Profit** | **Disabled** | "Let Profits Run". Positions are closed only on Trend Reversal. |
 | **Liquidation** | **Monitoring** | Logic includes liquidation price tracking to prevent total loss. |
 
@@ -111,7 +111,8 @@ Find the best parameters for the current market using multi-core grid search.
 python optimize/optimize_ema.py
 
 # Optimize ADX, Volume & ATR
-python optimize/optimize_adx.py
+python optimize/optimize_adx_threshold.py
+python optimize/optimize_adx_length.py
 ```
 
 ### 🔴 Run Live

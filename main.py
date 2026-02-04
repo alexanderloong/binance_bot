@@ -1,4 +1,4 @@
-# Binance Trading Bot - v1.9.2 (Aggressive Growth)
+# Binance Trading Bot - v1.12.0 (Pure Trend Following)
 import time
 from bot.exchange_client import ExchangeClient
 from bot.strategy import Strategy

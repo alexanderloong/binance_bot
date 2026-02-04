@@ -2,6 +2,23 @@
  
  All notable changes to this project will be documented in this file.
  
+## [1.12.0] - 2026-02-04
+### Added
+- **Granular Optimization Files:** Further split optimization scripts for better isolation:
+    - `optimize_adx_threshold.py` - Focuses purely on trend strength threshold.
+    - `optimize_adx_length.py` - Focuses on the ADX lookback period.
+- **Refined Leverage Settings:** Optimized leverage and position sizing for better risk-adjusted returns (25x Leverage / 20% Position).
+
+### Changed
+- **Documentation Update:** Synchronized all README files and config versioning to match the current stable release.
+- **Improved Optimizer Logic:** Performance improvements in parallel processing for all scripts in the `optimize/` directory.
+
+### Performance (v1.12.0 Clean Trend)
+- **Net Profit:** **~697%**
+- **Profit Factor:** **1.80**
+- **Max Drawdown:** **16.8%**
+- **Win Rate:** 39.0%
+
 ## [1.11.0] - 2026-02-03
 ### Changed
 - **Strategy Shift:** Transitioned to **Pure Trend Following** strategy.

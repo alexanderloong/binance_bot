@@ -3,8 +3,8 @@ from dotenv import load_dotenv
 
 # ==========================================
 # BINANCE TRADING BOT CONFIGURATION
-# Version: 1.11.0
-# Date: 2026-02-03
+# Version: 1.12.0
+# Date: 2026-02-04
 # Strategy: Pure Trend Following (SuperTrend + EMA + ADX + RSI + Vol)
 # ==========================================
 

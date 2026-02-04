@@ -2,7 +2,7 @@
 
 This directory contains individual optimization scripts for each parameter of the trading strategy.
 
-> **Version:** 1.11.0 | **Updated:** 2026-02-03
+> **Version:** 1.12.0 | **Updated:** 2026-02-04
 
 ## 📁 Individual Parameter Optimization Files
 
@@ -12,7 +12,8 @@ This directory contains individual optimization scripts for each parameter of th
 - **optimize_supertrend_factor.py** - Optimizes SuperTrend multiplier factor
 
 ### Filter Indicators
-- **optimize_adx.py** - Optimizes ADX threshold (trend strength filter)
+- **optimize_adx_threshold.py** - Optimizes ADX threshold filter
+- **optimize_adx_length.py** - Optimizes ADX lookback period
 - **optimize_volume.py** - Optimizes Volume MA length (volume filter)
 - **optimize_rsi_overbought.py** - Optimizes RSI overbought threshold
 - **optimize_rsi_oversold.py** - Optimizes RSI oversold threshold
@@ -40,7 +41,10 @@ Each optimization file can be run independently:
 python optimize/optimize_ema.py
 
 # Example: Optimize ADX threshold
-python optimize/optimize_adx.py
+python optimize/optimize_adx_threshold.py
+
+# Example: Optimize ADX length
+python optimize/optimize_adx_length.py
 
 # Example: Optimize ATR Stop Loss
 python optimize/optimize_atr.py
@@ -60,7 +64,7 @@ python optimize/optimize_atr.py
 3. Finally tune risk management (ATR Stop Loss, Leverage)
 4. Update `config.py` with optimal values after each step
 
-## 📈 Current Optimized Settings (v1.11.0)
+## 📈 Current Optimized Settings (v1.12.0)
 
 | Parameter | Value | Description |
 |-----------|-------|-------------|
