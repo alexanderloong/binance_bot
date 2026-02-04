@@ -14,7 +14,7 @@ from config import (
     VOLUME_MA_LENGTH
 )
 
-LIMIT = 150000
+LIMIT = 70000
 WORKERS = 5
 SLEEP = 1.5
 GEN_CHART = True
@@ -454,6 +454,12 @@ def run_backtest():
     print(f"Win Rate: {res['win_rate']:.1f}% ({res['total_trades']} trades)")
     print(f"Profit Factor: {res['profit_factor']:.2f}")
     print(f"Max Drawdown: {res['max_drawdown']:.2f}%")
+        
+    # Log data range
+    if not df.empty:
+        start_time = df.iloc[0]['timestamp']
+        end_time = df.iloc[-1]['timestamp']
+        print(f"Data Range: {start_time} -> {end_time} ({(end_time - start_time).days} days) " )
     
     # Generate Performance Summary Plot
     try:
