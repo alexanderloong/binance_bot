@@ -29,7 +29,7 @@ SUPERTREND_FACTOR = 1.45       # Multiplier for Band width
 EMA_LENGTH = 102              # EMA Baseline (Price > EMA = Bullish)
 
 # Risk Management
-LEVERAGE = 25                  # Leverage multiplier
+LEVERAGE = 20                  # Leverage multiplier
 POSITION_SIZE_PERCENT = 0.2     # 100% of Equity per Trade
 
 # Safety
