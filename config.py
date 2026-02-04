@@ -25,7 +25,7 @@ TIMEFRAME = "15m"             # Timeframe: 15m (Balance between noise and trend)
 # Trend Indicators
 # Optimized for capturing major swings while filtering chop
 SUPERTREND_LENGTH = 18        # Length for ATR calculation in SuperTrend
-SUPERTREND_FACTOR = 1.5       # Multiplier for Band width
+SUPERTREND_FACTOR = 1.45       # Multiplier for Band width
 EMA_LENGTH = 102              # EMA Baseline (Price > EMA = Bullish)
 
 # Risk Management
@@ -41,7 +41,7 @@ ADX_LENGTH = 14
 ADX_THRESHOLD = 18            # Trend Strength (Buy only if ADX > 18)
 
 ATR_LENGTH = 14
-ATR_MULTIPLIER = 0.8          # Tight SL (0.8x ATR) to cut losses fast
+ATR_MULTIPLIER = 0.7         # Tight SL (0.8x ATR) to cut losses fast
 
 # Momentum (RSI)
 # Avoid entering at extreme exhaustion points

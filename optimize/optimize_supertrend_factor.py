@@ -52,7 +52,7 @@ def run_optimization():
         return
 
     # Define SuperTrend factor range
-    st_factors = np.arange(1.2, 2.1, 0.1)
+    st_factors = np.arange(1.4, 2.0, 0.01)
     
     # Create tasks
     tasks = [(st_fac,) for st_fac in st_factors]
