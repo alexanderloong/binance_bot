@@ -14,7 +14,7 @@ from config import (
     VOLUME_MA_LENGTH
 )
 
-LIMIT = 70000
+LIMIT = 150000
 WORKERS = 5
 SLEEP = 1.5
 GEN_CHART = True
@@ -459,7 +459,10 @@ def run_backtest():
     if not df.empty:
         start_time = df.iloc[0]['timestamp']
         end_time = df.iloc[-1]['timestamp']
-        print(f"Data Range: {start_time} -> {end_time} ({(end_time - start_time).days} days) " )
+        total_days = (end_time - start_time).days
+        avg_trades_per_day = res['total_trades'] / total_days if total_days > 0 else 0
+        print(f"Data Range: {start_time} -> {end_time} ({total_days} days)")
+        print(f"Avg Trades/Day: {avg_trades_per_day:.2f}")
     
     # Generate Performance Summary Plot
     try:
