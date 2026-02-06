@@ -501,11 +501,24 @@ def run_backtest():
     df_st[f'EMA_{EMA_SLOPE_EMA_LENGTH}'] = DataProcessor.calculate_ema(df_st, length=EMA_SLOPE_EMA_LENGTH)[f'EMA_{EMA_SLOPE_EMA_LENGTH}']
     df_final = df_st
     
-    # Run simulation with verbose output (we will modify simulate to return trades and we print them)
-    # Or just print after simulation
+    # Run simulation
     res, trades = simulate(df_final, use_ema_filter=True, use_rsi_filter=True, use_volume_filter=True, use_ema_slope_sizing=True, use_divergence_filter=True)
     
-    print("\n--- Trade History ---")
+    # --- LOGGING SETUP ---
+    log_dir = "resource/backtest_logs"
+    if not os.path.exists(log_dir):
+        os.makedirs(log_dir)
+    
+    timestamp = time.strftime("%Y%m%d_%H%M%S")
+    log_file = os.path.join(log_dir, f"backtest_{timestamp}.txt")
+    
+    log_lines = []
+
+    def log(msg):
+        print(msg)
+        log_lines.append(str(msg))
+    
+    log("--- Trade History ---")
     for t in trades:
         time_str = t['time']
         if isinstance(time_str, pd.Timestamp):
@@ -524,12 +537,13 @@ def run_backtest():
             pnl_label = "Fee" if 'OPEN' in type_str else "PnL"
             log_msg += f", {pnl_label}: {pnl:>8.2f} USDT"
             
-        print(log_msg, flush=True)
-    print(f"\nFinal Balance: {res['final_balance']:.2f} USDT")
-    print(f"Total PnL: {res['pnl_pct']:.2f}%")
-    print(f"Win Rate: {res['win_rate']:.1f}% ({res['total_trades']} trades)")
-    print(f"Profit Factor: {res['profit_factor']:.2f}")
-    print(f"Max Drawdown: {res['max_drawdown']:.2f}%")
+        log(log_msg)
+        
+    log(f"\nFinal Balance: {res['final_balance']:.2f} USDT")
+    log(f"Total PnL: {res['pnl_pct']:.2f}%")
+    log(f"Win Rate: {res['win_rate']:.1f}% ({res['total_trades']} trades)")
+    log(f"Profit Factor: {res['profit_factor']:.2f}")
+    log(f"Max Drawdown: {res['max_drawdown']:.2f}%")
         
     # Log data range
     if not df.empty:
@@ -537,8 +551,16 @@ def run_backtest():
         end_time = df.iloc[-1]['timestamp']
         total_days = (end_time - start_time).days
         avg_trades_per_day = res['total_trades'] / total_days if total_days > 0 else 0
-        print(f"Data Range: {start_time} -> {end_time} ({total_days} days)")
-        print(f"Avg Trades/Day: {avg_trades_per_day:.2f}")
+        log(f"Data Range: {start_time} -> {end_time} ({total_days} days)")
+        log(f"Avg Trades/Day: {avg_trades_per_day:.2f}")
+
+    # Write logs to file
+    try:
+        with open(log_file, "w", encoding='utf-8') as f:
+            f.write("\n".join(log_lines))
+        print(f"\n✅ Backtest logs saved to: {log_file}")
+    except Exception as e:
+        print(f"\n❌ Failed to save log file: {e}")
     
     # Generate Performance Summary Plot
     try:

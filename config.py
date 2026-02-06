@@ -4,7 +4,7 @@ from dataclasses import dataclass
 
 # ==========================================
 # BINANCE TRADING BOT CONFIGURATION
-# Version: 1.14.0
+# Version: 1.14.1
 # Date: 2026-02-06
 # Strategy: Pure Trend Following (SuperTrend + EMA + ADX + RSI + Vol)
 # ==========================================

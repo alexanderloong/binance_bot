@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.14.1] - 2026-02-06
+
+### Added
+-   **Backtest Logging**: Backtest results are now saved to `resource/backtest_logs/`.
+
+### Changed
+-   **Risk Config**: Reduced default Leverage to 9x and Position Size to 15% for safer default risk profile.
+
 ## [1.14.0] - 2026-02-06
 
 ### Added
