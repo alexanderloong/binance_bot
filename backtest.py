@@ -10,7 +10,7 @@ from config import (
     SYMBOL, TIMEFRAME, SUPERTREND_LENGTH, SUPERTREND_FACTOR, EMA_LENGTH,
     POSITION_SIZE_PERCENT, LEVERAGE, ADX_LENGTH, ADX_THRESHOLD, 
     ATR_LENGTH, ATR_MULTIPLIER,
-    RSI_LENGTH, RSI_OVERBOUGHT, RSI_OVERSOLD,
+    RSI_LENGTH, RSI_OVERBOUGHT, RSI_OVERSOLD, RSI_LONG_THRESHOLD,
     VOLUME_MA_LENGTH
 )
 
@@ -19,7 +19,7 @@ WORKERS = 5
 SLEEP = 1.5
 GEN_CHART = True
 
-def simulate(df, use_ema_filter=True, st_length=SUPERTREND_LENGTH, st_factor=SUPERTREND_FACTOR, sl_multiplier=ATR_MULTIPLIER, adx_threshold=ADX_THRESHOLD, use_rsi_filter=True, rsi_overbought=RSI_OVERBOUGHT, rsi_oversold=RSI_OVERSOLD, use_volume_filter=True, volume_ma_length=VOLUME_MA_LENGTH, leverage=LEVERAGE, position_size_percent=POSITION_SIZE_PERCENT):
+def simulate(df, use_ema_filter=True, st_length=SUPERTREND_LENGTH, st_factor=SUPERTREND_FACTOR, sl_multiplier=ATR_MULTIPLIER, adx_threshold=ADX_THRESHOLD, use_rsi_filter=True, rsi_overbought=RSI_OVERBOUGHT, rsi_oversold=RSI_OVERSOLD, rsi_long_threshold=RSI_LONG_THRESHOLD, use_volume_filter=True, volume_ma_length=VOLUME_MA_LENGTH, leverage=LEVERAGE, position_size_percent=POSITION_SIZE_PERCENT):
     initial_balance = 1000
     balance = initial_balance
     position_amt = 0 
@@ -133,7 +133,7 @@ def simulate(df, use_ema_filter=True, st_length=SUPERTREND_LENGTH, st_factor=SUP
         
         # New: RSI Filter
         rsi_val = current_candle['RSI']
-        rsi_long_ok = rsi_val < rsi_overbought if use_rsi_filter else True
+        rsi_long_ok = (rsi_val < rsi_overbought and rsi_val > rsi_long_threshold) if use_rsi_filter else True
         rsi_short_ok = rsi_val > rsi_oversold if use_rsi_filter else True
         
         # New: Volume MA Filter

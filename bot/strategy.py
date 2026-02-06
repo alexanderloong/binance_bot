@@ -5,7 +5,7 @@ from config import (
     SUPERTREND_LENGTH, SUPERTREND_FACTOR, EMA_LENGTH, TIMEFRAME, 
     ADX_LENGTH, ADX_THRESHOLD, ATR_LENGTH, ATR_MULTIPLIER, 
     MAX_TRADES_PER_HOUR, POSITION_SIZE_PERCENT, LEVERAGE,
-    RSI_LENGTH, RSI_OVERBOUGHT, RSI_OVERSOLD,
+    RSI_LENGTH, RSI_OVERBOUGHT, RSI_OVERSOLD, RSI_LONG_THRESHOLD,
     VOLUME_MA_LENGTH
 )
 from .data_processor import DataProcessor
@@ -145,7 +145,7 @@ class Strategy:
         is_trending = adx_val > ADX_THRESHOLD
         
         # Determine RSI Conditions
-        rsi_long_ok = rsi_val < RSI_OVERBOUGHT
+        rsi_long_ok = RSI_LONG_THRESHOLD < rsi_val < RSI_OVERBOUGHT
         rsi_short_ok = rsi_val > RSI_OVERSOLD
         
         # Determine Volume Condition
@@ -179,7 +179,7 @@ class Strategy:
             else:
                 reasons = []
                 if not is_trending: reasons.append("ADX low")
-                if not rsi_long_ok: reasons.append("RSI overbought")
+                if not rsi_long_ok: reasons.append(f"RSI invalid (Req: {RSI_LONG_THRESHOLD}-{RSI_OVERBOUGHT})")
                 if not vol_ok: reasons.append("Volume low")
                 self.logger.info(f"LONG signal detected, but {', '.join(reasons)}. (ADX: {adx_val:.2f}, RSI: {rsi_val:.2f}, Vol: {current_volume:.0f}). Skipping.")
         elif current_trend == -1 and previous_trend == 1 and is_downtrend_short:

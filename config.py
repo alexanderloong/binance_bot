@@ -29,7 +29,7 @@ SUPERTREND_FACTOR = 1.45       # Multiplier for Band width
 EMA_LENGTH = 102              # EMA Baseline (Price > EMA = Bullish)
 
 # Risk Management
-LEVERAGE = 20                  # Leverage multiplier
+LEVERAGE = 10                  # Leverage multiplier
 POSITION_SIZE_PERCENT = 0.2     # 100% of Equity per Trade
 
 # Safety
@@ -48,6 +48,7 @@ ATR_MULTIPLIER = 0.7         # Tight SL (0.8x ATR) to cut losses fast
 RSI_LENGTH = 14
 RSI_OVERBOUGHT = 64           # Long limit
 RSI_OVERSOLD = 36             # Short limit
+RSI_LONG_THRESHOLD = 53       # Min RSI for Long (Trend Filter)
 
 # Volume
 # Confirm breakout validity
