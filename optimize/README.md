@@ -2,7 +2,7 @@
 
 This directory contains individual optimization scripts for each parameter of the trading strategy.
 
-> **Version:** 1.12.0 | **Updated:** 2026-02-04
+> **Version:** 1.15.0 | **Updated:** 2026-02-06
 
 ## 📁 Individual Parameter Optimization Files
 
@@ -17,19 +17,19 @@ This directory contains individual optimization scripts for each parameter of th
 - **optimize_volume.py** - Optimizes Volume MA length (volume filter)
 - **optimize_rsi_overbought.py** - Optimizes RSI overbought threshold
 - **optimize_rsi_oversold.py** - Optimizes RSI oversold threshold
+- **optimize_rsi_long_threshold.py** - (New) Optimizes RSI lower threshold for Long entries
+
+### Rule-Specific Optimizations (v1.13+)
+- **optimize_rsi_divergence.py** - Optimizes lookback and min RSI for bearish divergence detection.
+- **optimize_ema_slope.py** - Optimizes slope threshold and reduced sizing for flat markets.
 
 ### Risk Management
 - **optimize_atr.py** - Optimizes ATR-based stop loss multiplier
-- **optimize_leverage.py** - Optimizes leverage and position sizing
-
-## 📊 Combined Optimization Files (Legacy)
-These files optimize multiple parameters together:
-- **optimize_adx_volumn.py** - Combined ADX & Volume optimization
-- **optimize_rsi.py** - Combined RSI overbought & oversold optimization
+- **optimize_leverage.py** - Optimizes leverage and position sizing (Legacy/Grid)
 
 ## 🔧 Utility Files
-- **base_optimizer.py** - Base class for all optimizers
-- **plot_results.py** - Visualization tools for optimization results
+- **base_optimizer.py** - Base class for all optimizers (Multi-threaded & Robust)
+- **plot_results.py** - Visualization tools for performance charts
 - **verify_precision.py** - Verification utilities
 
 ## 🚀 Usage
@@ -37,46 +37,31 @@ These files optimize multiple parameters together:
 Each optimization file can be run independently:
 
 ```bash
-# Example: Optimize EMA length
-python optimize/optimize_ema.py
+# Example: Optimize Bearish Divergence parameters
+python optimize/optimize_rsi_divergence.py
 
-# Example: Optimize ADX threshold
-python optimize/optimize_adx_threshold.py
-
-# Example: Optimize ADX length
-python optimize/optimize_adx_length.py
-
-# Example: Optimize ATR Stop Loss
-python optimize/optimize_atr.py
+# Example: Optimize EMA Slope sizing
+python optimize/optimize_ema_slope.py
 ```
 
 ## 📝 Notes
+- All optimizers utilize the `BaseOptimizer` class for parallel execution and robust data fetching.
+- Results are saved to CSV files: `optimization_results_[parameter].csv`.
+- Performance metrics tracked: PnL%, Win Rate, Profit Factor, and Max Drawdown.
 
-- Each optimizer keeps other parameters fixed from `config.py`
-- Results are saved to CSV files in the format: `optimization_results_[parameter].csv`
-- All optimizers use parallel processing via `BaseOptimizer`
-- Recommended to run optimizations sequentially, updating `config.py` with best values after each run
-
-## 🎯 Optimization Workflow
-
-1. Start with trend indicators (EMA, SuperTrend Length, SuperTrend Factor)
-2. Then optimize filters (ADX, Volume, RSI Overbought, RSI Oversold)
-3. Finally tune risk management (ATR Stop Loss, Leverage)
-4. Update `config.py` with optimal values after each step
-
-## 📈 Current Optimized Settings (v1.12.0)
+## 📈 Current Production Settings (v1.15.0)
 
 | Parameter | Value | Description |
 |-----------|-------|-------------|
 | EMA_LENGTH | 102 | Trend baseline |
 | SUPERTREND_LENGTH | 18 | SuperTrend ATR period |
-| SUPERTREND_FACTOR | 1.5 | SuperTrend multiplier |
+| SUPERTREND_FACTOR | 1.45 | SuperTrend multiplier |
 | ADX_THRESHOLD | 18 | Minimum trend strength |
-| VOLUME_MA_LENGTH | 177 | Volume filter period |
-| RSI_OVERBOUGHT | 64 | Long entry limit |
-| RSI_OVERSOLD | 36 | Short entry limit |
-| ATR_MULTIPLIER | 0.8 | Stop loss distance |
+| RSI_LONG_THRESHOLD | 53 | Minimum RSI for Long entry |
+| RSI_OVERBOUGHT | 64 | Maximum RSI for Long entry |
+| ATR_MULTIPLIER | 0.7 | dynamic Stop Loss distance |
+| LEVERAGE | 10 | Production leverage |
+| POSITION_SIZE_PERCENT | 0.20 | 20% of account balance |
 
-## ⚠️ Removed Features
-
-- **Partial Take Profit** - Removed in v1.11.0 (not suitable for pure trend following strategy)
+---
+*Maintained for Production Stability 2026*
