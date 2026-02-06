@@ -1,44 +1,39 @@
 import time
 from datetime import datetime, timedelta
-import pytz
-from config import (
-    SUPERTREND_LENGTH, SUPERTREND_FACTOR, EMA_LENGTH, TIMEFRAME, 
-    ADX_LENGTH, ADX_THRESHOLD, ATR_LENGTH, ATR_MULTIPLIER, 
-    MAX_TRADES_PER_HOUR, POSITION_SIZE_PERCENT, LEVERAGE,
-    RSI_LENGTH, RSI_OVERBOUGHT, RSI_OVERSOLD, RSI_LONG_THRESHOLD,
-    VOLUME_MA_LENGTH,
-    RSI_LENGTH, RSI_OVERBOUGHT, RSI_OVERSOLD, RSI_LONG_THRESHOLD,
-    VOLUME_MA_LENGTH,
-    EMA_SLOPE_EMA_LENGTH, EMA_SLOPE_LOOKBACK, EMA_SLOPE_THRESHOLD, REDUCED_POSITION_SIZE_PERCENT,
-    RSI_DIV_LOOKBACK, RSI_DIV_MIN_RSI, RSI_DIV_PARTIAL_CLOSE_PCT
-)
+from typing import Optional, List, Any
+import pandas as pd # Type hint requirement
+
+from config import settings
 from .data_processor import DataProcessor
 from .utils import parse_timeframe_to_seconds
 
 class Strategy:
-    def __init__(self, exchange_client, logger):
+    def __init__(self, exchange_client: Any, logger: Any):
         self.client = exchange_client
         self.logger = logger
-        self.in_position = False 
-        self.last_candle_time = None
-        self.trade_history = [] # For rate limiting
-        self.stop_loss_price = None
+        self.in_position: bool = False 
+        self.last_candle_time: Optional[int] = None
+        self.trade_history: List[float] = [] # For rate limiting
+        self.stop_loss_price: Optional[float] = None
         
         # Parse timeframe for stale candle checking
-        # Parse timeframe for stale candle checking
-        self.tf_seconds = parse_timeframe_to_seconds(TIMEFRAME)
+        self.tf_seconds: int = parse_timeframe_to_seconds(settings.TIMEFRAME)
 
-    def check_rate_limit(self):
+    def check_rate_limit(self) -> bool:
         current_time = time.time()
         # Keep only trades within last hour (3600 seconds)
         self.trade_history = [t for t in self.trade_history if current_time - t < 3600]
         
-        if len(self.trade_history) >= MAX_TRADES_PER_HOUR:
-            self.logger.warning(f"RATE LIMIT REACHED: {len(self.trade_history)} trades in last hour. Max is {MAX_TRADES_PER_HOUR}. Skipping trade.")
+        if len(self.trade_history) >= settings.MAX_TRADES_PER_HOUR:
+            self.logger.warning(f"RATE LIMIT REACHED: {len(self.trade_history)} trades in last hour. Max is {settings.MAX_TRADES_PER_HOUR}. Skipping trade.")
             return False
         return True
 
-    def run_analysis(self):
+    def run_analysis(self) -> bool:
+        """
+        Main analysis loop called every cycle.
+        Returns False if no action was taken or data was valid but no trade.
+        """
         df = self.client.fetch_ohlcv(limit=300)
         
         if df is None or df.empty:
@@ -49,33 +44,62 @@ class Strategy:
         current_pos_amt, entry_price = self.client.get_current_position()
         
         if current_pos_amt != 0:
-             current_price = df['close'].iloc[-1] # Current mark/last price
-             
-             # Reconstruct Stop Loss if missing (e.g. after bot restart)
-             if self.stop_loss_price is None:
-                 # Fetch ATR of the last closed candle
-                 df_ha = DataProcessor.calculate_heikin_ashi(df)
-                 atr_val = DataProcessor.calculate_atr(df_ha, ATR_LENGTH).iloc[-2]
-                 
-                 if current_pos_amt > 0:
-                     self.stop_loss_price = entry_price - (atr_val * ATR_MULTIPLIER)
-                 else:
-                     self.stop_loss_price = entry_price + (atr_val * ATR_MULTIPLIER)
-                 self.logger.info(f"Reconstructed SOFTWARE STOP LOSS at {self.stop_loss_price:.2f} (Entry: {entry_price:.2f})")
-
-             # PARTIAL TAKE PROFIT - DISABLED (Pure Trend Following)
-
-             # Check for Stop Loss hit
-             is_sl_hit = (current_pos_amt > 0 and current_price <= self.stop_loss_price) or \
-                         (current_pos_amt < 0 and current_price >= self.stop_loss_price)
-             
-             if is_sl_hit:
-                 self.logger.warning(f"SOFTWARE STOP LOSS HIT at {current_price:.2f} (Target: {self.stop_loss_price:.2f}). Closing position.")
-                 self.close_all_positions()
-                 self.stop_loss_price = None
-                 return # Skip further analysis this cycle
+             self._manage_open_position(df, current_pos_amt, entry_price)
+             # If position closed during management, update? 
+             # Ideally we return here if SL triggered to avoid entering same candle logic immediately
+             # But legacy logic allows continuation if safe. 
+             # Logic from old run_analysis: "return # Skip further analysis this cycle" if SL hit.
+             if self.stop_loss_price is None and current_pos_amt != 0: 
+                 # This implies SL was hit and cleared (and position closing initiated), 
+                 # OR it's a new position without SL (unlikely due to open_position logic).
+                 # To act exactly like before:
+                 pass
 
         # --- FIX: Prevent Multi-Entry and Flickering ---
+        delay_seconds = self._check_new_candle(df)
+        if delay_seconds is None:
+            return False
+
+        # --- DATA PROCESSING ---
+        df_final = self._prepare_indicators(df)
+        
+        # --- SIGNAL ANALYSIS ---
+        self._analyze_market_and_trade(df_final, current_pos_amt, entry_price, delay_seconds)
+        return True
+
+    def _manage_open_position(self, df: pd.DataFrame, current_pos_amt: float, entry_price: float) -> None:
+        """
+        Handles Stop Loss and basic position logic.
+        """
+        current_price = df['close'].iloc[-1] # Current mark/last price
+        
+        # Reconstruct Stop Loss if missing (e.g. after bot restart)
+        if self.stop_loss_price is None:
+            # Fetch ATR of the last closed candle
+            df_ha = DataProcessor.calculate_heikin_ashi(df)
+            atr_val = DataProcessor.calculate_atr(df_ha, settings.ATR_LENGTH).iloc[-2]
+            
+            if current_pos_amt > 0:
+                self.stop_loss_price = entry_price - (atr_val * settings.ATR_MULTIPLIER)
+            else:
+                self.stop_loss_price = entry_price + (atr_val * settings.ATR_MULTIPLIER)
+            self.logger.info(f"Reconstructed SOFTWARE STOP LOSS at {self.stop_loss_price:.2f} (Entry: {entry_price:.2f})")
+
+        # Check for Stop Loss hit
+        is_sl_hit = (current_pos_amt > 0 and current_price <= self.stop_loss_price) or \
+                    (current_pos_amt < 0 and current_price >= self.stop_loss_price)
+        
+        if is_sl_hit:
+            self.logger.warning(f"SOFTWARE STOP LOSS HIT at {current_price:.2f} (Target: {self.stop_loss_price:.2f}). Closing position.")
+            self.close_all_positions()
+            self.stop_loss_price = None
+
+    def _check_new_candle(self, df: pd.DataFrame) -> Optional[float]:
+        """
+        Checks if the latest data represents a new, valid candle to process.
+        Returns:
+            Optional[float]: Delay in seconds if valid new candle, None if should skip.
+        """
         try:
             # Get timestamp of the last CLOSED candle (second to last row)
             last_closed_candle = df.iloc[-2]
@@ -84,12 +108,11 @@ class Strategy:
             
             # 1. If we already processed this EXACT candle, skip
             if self.last_candle_time is not None and self.last_candle_time == last_closed_ts_val:
-                return False
+                return None
                 
             # 2. If we see a candle that is OLDER than our last processed one (API Flicker), skip
             if self.last_candle_time is not None and last_closed_ts_val < self.last_candle_time:
-                # self.logger.debug(f"API Flicker detected: {last_closed_time} is older than last processed.")
-                return False
+                return None
 
             # Calculate Latency/Delay
             candle_close_time = last_closed_time + timedelta(seconds=self.tf_seconds)
@@ -99,84 +122,80 @@ class Strategy:
             # 3. SUCCESS: It's a fresh, new candle.
             self.last_candle_time = last_closed_ts_val
             self.logger.info(f"Processing new candle: {last_closed_time} (Latency: {delay_seconds:.1f}s)")
+            return delay_seconds
             
         except Exception as e:
             self.logger.error(f"Error checking candle timestamp: {e}")
-            return False
-        # -----------------------------------------------
+            return None
 
+    def _prepare_indicators(self, df: pd.DataFrame) -> pd.DataFrame:
         df_ha = DataProcessor.calculate_heikin_ashi(df)
         df_st = DataProcessor.calculate_supertrend(df_ha)
-        df_st[f'EMA_{EMA_LENGTH}'] = DataProcessor.calculate_ema(df_st, length=EMA_LENGTH)[f'EMA_{EMA_LENGTH}']
-        df_st['ADX'] = DataProcessor.calculate_adx(df, length=ADX_LENGTH)
-        df_st['ATR'] = DataProcessor.calculate_atr(df, length=ATR_LENGTH)
-        df_st['RSI'] = DataProcessor.calculate_rsi(df, length=RSI_LENGTH)
-        df_st = DataProcessor.calculate_volume_ma(df_st, length=VOLUME_MA_LENGTH)
-        df_st[f'EMA_{EMA_SLOPE_EMA_LENGTH}'] = DataProcessor.calculate_ema(df_st, length=EMA_SLOPE_EMA_LENGTH)[f'EMA_{EMA_SLOPE_EMA_LENGTH}']
-        df_final = df_st
+        df_st[f'EMA_{settings.EMA_LENGTH}'] = DataProcessor.calculate_ema(df_st, length=settings.EMA_LENGTH)[f'EMA_{settings.EMA_LENGTH}']
+        df_st['ADX'] = DataProcessor.calculate_adx(df, length=settings.ADX_LENGTH)
+        df_st['ATR'] = DataProcessor.calculate_atr(df, length=settings.ATR_LENGTH)
+        df_st['RSI'] = DataProcessor.calculate_rsi(df, length=settings.RSI_LENGTH)
+        df_st = DataProcessor.calculate_volume_ma(df_st, length=settings.VOLUME_MA_LENGTH)
+        df_st[f'EMA_{settings.EMA_SLOPE_EMA_LENGTH}'] = DataProcessor.calculate_ema(df_st, length=settings.EMA_SLOPE_EMA_LENGTH)[f'EMA_{settings.EMA_SLOPE_EMA_LENGTH}']
+        return df_st
+
+    def _analyze_market_and_trade(self, df_final: pd.DataFrame, current_pos_amt: float, entry_price: float, delay_seconds: float) -> None:
         
         # Get the last closed candle (second to last row, as last row is unfinished)
         last_candle = df_final.iloc[-2]
         prev_candle = df_final.iloc[-3]
         
         # SuperTrend columns will be named like SUPERT_15_1.5
-        st_col = f"SUPERT_{SUPERTREND_LENGTH}_{SUPERTREND_FACTOR}"
-        st_dir_col = f"SUPERTd_{SUPERTREND_LENGTH}_{SUPERTREND_FACTOR}" # 1 for Buy, -1 for Sell
+        st_col = f"SUPERT_{settings.SUPERTREND_LENGTH}_{settings.SUPERTREND_FACTOR}"
+        st_dir_col = f"SUPERTd_{settings.SUPERTREND_LENGTH}_{settings.SUPERTREND_FACTOR}" # 1 for Buy, -1 for Sell
         
         current_trend = last_candle[st_dir_col]
         previous_trend = prev_candle[st_dir_col]
         
         close_price = last_candle['close']
-        ema_val = last_candle[f'EMA_{EMA_LENGTH}']
+        ema_val = last_candle[f'EMA_{settings.EMA_LENGTH}']
         adx_val = last_candle['ADX']
         atr_val = last_candle['ATR']
         rsi_val = last_candle['RSI']
-        vol_ma_val = last_candle[f'VOL_MA_{VOLUME_MA_LENGTH}']
+        vol_ma_val = last_candle[f'VOL_MA_{settings.VOLUME_MA_LENGTH}']
         current_volume = last_candle['volume']
         candle_time = last_candle['timestamp'].strftime('%d-%m-%Y %H:%M:%S')
         
-        ema_slope_val = last_candle[f'EMA_{EMA_SLOPE_EMA_LENGTH}']
-        ema_slope_prev = df_final.iloc[-(EMA_SLOPE_LOOKBACK + 1)][f'EMA_{EMA_SLOPE_EMA_LENGTH}']
+        ema_slope_val = last_candle[f'EMA_{settings.EMA_SLOPE_EMA_LENGTH}']
+        ema_slope_prev = df_final.iloc[-(settings.EMA_SLOPE_LOOKBACK + 1)][f'EMA_{settings.EMA_SLOPE_EMA_LENGTH}']
         ema_slope_pct = (ema_slope_val - ema_slope_prev) / ema_slope_prev if ema_slope_prev != 0 else 0
-        is_flat_slope = abs(ema_slope_pct) < EMA_SLOPE_THRESHOLD
+        is_flat_slope = abs(ema_slope_pct) < settings.EMA_SLOPE_THRESHOLD
 
-        self.logger.info(f"Market Data: {candle_time} | Close: {close_price} | Trend: {current_trend} | EMA{EMA_LENGTH}: {ema_val:.2f} | ADX: {adx_val:.2f} | ATR: {atr_val:.2f} | RSI: {rsi_val:.2f} | Vol: {current_volume:.0f} (MA: {vol_ma_val:.0f}) | EMA{EMA_SLOPE_EMA_LENGTH} Slope: {ema_slope_pct*100:.3f}% ({'FLAT' if is_flat_slope else 'STEEP'})")
+        self.logger.info(f"Market Data: {candle_time} | Close: {close_price} | Trend: {current_trend} | EMA{settings.EMA_LENGTH}: {ema_val:.2f} | ADX: {adx_val:.2f} | ATR: {atr_val:.2f} | RSI: {rsi_val:.2f} | Vol: {current_volume:.0f} (MA: {vol_ma_val:.0f}) | EMA{settings.EMA_SLOPE_EMA_LENGTH} Slope: {ema_slope_pct*100:.3f}% ({'FLAT' if is_flat_slope else 'STEEP'})")
 
         # --- BEARISH DIVERGENCE CHECK (Rule 3) ---
-        bearish_div = DataProcessor.check_bearish_divergence(df_final, lookback=RSI_DIV_LOOKBACK, min_rsi=RSI_DIV_MIN_RSI)
+        bearish_div = DataProcessor.check_bearish_divergence(df_final, lookback=settings.RSI_DIV_LOOKBACK, min_rsi=settings.RSI_DIV_MIN_RSI)
         if bearish_div:
-            self.logger.info(f"⚠️ BEARISH DIVERGENCE DETECTED (RSI Peaks in last {RSI_DIV_LOOKBACK} candles)!")
+            self.logger.info(f"⚠️ BEARISH DIVERGENCE DETECTED (RSI Peaks in last {settings.RSI_DIV_LOOKBACK} candles)!")
 
         # --- STALENESS CHECK (Only skip TRADE logic, not analysis logging) ---
         STALE_TOLERANCE = 120 
-        
         if delay_seconds > STALE_TOLERANCE:
-            if self.last_candle_time is None or last_closed_ts_val > self.last_candle_time:
-                self.last_candle_time = last_closed_ts_val
-            self.logger.warning(f"Candle {last_closed_time} is STALE (Closed {int(delay_seconds)}s ago). Skipping trade logic.")
-            return False
+            if self.last_candle_time is None: # Should technically be set by _check_new_candle
+                 pass 
+            self.logger.warning(f"Candle {candle_time} is STALE (Closed {int(delay_seconds)}s ago). Skipping trade logic.")
+            return
 
         # Determine Trend Strength
-        is_trending = adx_val > ADX_THRESHOLD
+        is_trending = adx_val > settings.ADX_THRESHOLD
         
         # Determine RSI Conditions
-        rsi_long_ok = RSI_LONG_THRESHOLD < rsi_val < RSI_OVERBOUGHT
-        rsi_short_ok = rsi_val > RSI_OVERSOLD
+        rsi_long_ok = settings.RSI_LONG_THRESHOLD < rsi_val < settings.RSI_OVERBOUGHT
+        rsi_short_ok = rsi_val > settings.RSI_OVERSOLD
         
         # Determine Volume Condition
         vol_ok = current_volume > vol_ma_val
         
         # Determine Signal based on Trend Flip + EMA Filter
-        signal = None
-        
-        # Determine EMA filter
         is_uptrend_long = close_price > ema_val
         is_downtrend_short = close_price < ema_val
         
-        # current_pos_amt already fetched above
-        
         # 1. LOGIC ĐÓNG LỆNH (Exit Priority)
-        # Note: Position management (SL) is handled at the start of run_analysis
         if current_pos_amt > 0 and current_trend == -1: # Existing Long & Trend turns Red
              self.logger.info(f"Trend flipped to RED. Closing LONG position ({current_pos_amt}).")
              self.close_all_positions()
@@ -189,17 +208,14 @@ class Strategy:
         
         # 1b. RSI DIVERGENCE - PARTIAL CLOSE & BE
         elif current_pos_amt > 0 and bearish_div:
-             # Only if we haven't already moved to BE (roughly)
              # If SL is below entry, we are not at BE.
-             # Or if we just want to execute this ONCE per divergence instance. 
-             # Simpler: If SL < Entry (Normal SL), do the adjustment.
              is_sl_at_be = self.stop_loss_price is not None and self.stop_loss_price >= entry_price
              
              if not is_sl_at_be:
-                 self.logger.info(f"Bearish Divergence on Long. Action: Close {RSI_DIV_PARTIAL_CLOSE_PCT*100}% & Move SL to BE.")
+                 self.logger.info(f"Bearish Divergence on Long. Action: Close {settings.RSI_DIV_PARTIAL_CLOSE_PCT*100}% & Move SL to BE.")
                  
                  # 1. Partial Close
-                 close_amt = abs(current_pos_amt) * RSI_DIV_PARTIAL_CLOSE_PCT
+                 close_amt = abs(current_pos_amt) * settings.RSI_DIV_PARTIAL_CLOSE_PCT
                  self.partial_close_position(close_amt, 'sell')
                  
                  # 2. Move SL to Break Even (plus small buffer?)
@@ -207,7 +223,7 @@ class Strategy:
                  self.logger.info(f"Moved Software SL to Break Even: {self.stop_loss_price}")
 
         # 2. LOGIC MỞ LỆNH (Entry Filtered)
-        signal = None
+        signal: Optional[str] = None
         if current_trend == 1 and previous_trend == -1 and is_uptrend_long:
             if bearish_div:
                 self.logger.info("LONG signal detected but BLOCKED by Bearish Divergence.")
@@ -217,7 +233,7 @@ class Strategy:
             else:
                 reasons = []
                 if not is_trending: reasons.append("ADX low")
-                if not rsi_long_ok: reasons.append(f"RSI invalid (Req: {RSI_LONG_THRESHOLD}-{RSI_OVERBOUGHT})")
+                if not rsi_long_ok: reasons.append(f"RSI invalid (Req: {settings.RSI_LONG_THRESHOLD}-{settings.RSI_OVERBOUGHT})")
                 if not vol_ok: reasons.append("Volume low")
                 self.logger.info(f"LONG signal detected, but {', '.join(reasons)}. (ADX: {adx_val:.2f}, RSI: {rsi_val:.2f}, Vol: {current_volume:.0f}). Skipping.")
         elif current_trend == -1 and previous_trend == 1 and is_downtrend_short:
@@ -234,9 +250,9 @@ class Strategy:
             if current_pos_amt == 0:
                 self.logger.info(f"SIGNAL DETECTED: {signal} (Position is Empty)")
                 # Dynamic Position Sizing based on EMA Slope
-                actual_pos_size = REDUCED_POSITION_SIZE_PERCENT if is_flat_slope else POSITION_SIZE_PERCENT
+                actual_pos_size = settings.REDUCED_POSITION_SIZE_PERCENT if is_flat_slope else settings.POSITION_SIZE_PERCENT
                 if is_flat_slope:
-                    self.logger.info(f"⚠️ EMA{EMA_SLOPE_EMA_LENGTH} is FLAT (Slope: {ema_slope_pct*100:.3f}% < {EMA_SLOPE_THRESHOLD*100}%). Reducing size to {actual_pos_size*100}%.")
+                    self.logger.info(f"⚠️ EMA{settings.EMA_SLOPE_EMA_LENGTH} is FLAT (Slope: {ema_slope_pct*100:.3f}% < {settings.EMA_SLOPE_THRESHOLD*100}%). Reducing size to {actual_pos_size*100}%.")
                 
                 self.open_position(signal, close_price, atr_val, pos_size_pct=actual_pos_size)
             else:
@@ -244,15 +260,13 @@ class Strategy:
         else:
             self.logger.info(f"No entry signal for {candle_time} (Current Trend: {current_trend}, Position: {current_pos_amt})")
 
-    def close_all_positions(self):
+    def close_all_positions(self) -> None:
         self.logger.info("Closing all positions and canceling orders...")
-        # ExchangeClient.close_all_positions already handles canceling
         if self.client.close_all_positions():
             self.in_position = False
             self.stop_loss_price = None
 
-    # PARTIAL CLOSE - DISABLED (Pure Trend Following)
-    def partial_close_position(self, quantity, side):
+    def partial_close_position(self, quantity: float, side: str) -> None:
         self.logger.info(f"Partially closing {quantity:.4f} ({side})...")
         try:
              order = self.client.create_order(side, quantity)
@@ -261,7 +275,7 @@ class Strategy:
         except Exception as e:
              self.logger.error(f"Failed to partial close: {e}")
 
-    def open_position(self, side, price, atr_val, pos_size_pct=POSITION_SIZE_PERCENT):
+    def open_position(self, side: str, price: float, atr_val: float, pos_size_pct: float = settings.POSITION_SIZE_PERCENT) -> None:
         
         # Safety Check: Rate Limit
         if not self.check_rate_limit():
@@ -275,16 +289,15 @@ class Strategy:
                 return
 
             # Calculate trade amount using leverage
-            # Amount in USDT (Buying Power) = Balance * Position_Size % * Leverage
-            amount_usdt = balance * pos_size_pct * LEVERAGE
+            amount_usdt = balance * pos_size_pct * settings.LEVERAGE
             trade_amount = amount_usdt / price
             
-            self.logger.info(f"Opening {side} position at {price} (Size: {pos_size_pct*100}% of Balance: {balance} USDT, Leverage: {LEVERAGE}x -> {trade_amount:.4f} BTC)")
+            self.logger.info(f"Opening {side} position at {price} (Size: {pos_size_pct*100}% of Balance: {balance} USDT, Leverage: {settings.LEVERAGE}x -> {trade_amount:.4f} BTC)")
             
             if side == 'LONG':
-                 self.stop_loss_price = price - (atr_val * ATR_MULTIPLIER)
+                 self.stop_loss_price = price - (atr_val * settings.ATR_MULTIPLIER)
             else:
-                 self.stop_loss_price = price + (atr_val * ATR_MULTIPLIER)
+                 self.stop_loss_price = price + (atr_val * settings.ATR_MULTIPLIER)
             
             self.logger.info(f"Setting SOFTWARE SL: {self.stop_loss_price:.2f} (ATR: {atr_val:.2f})")
             # -------------------------------------

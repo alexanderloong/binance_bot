@@ -1,36 +1,38 @@
 import time
-import pandas as pd
 import logging
+from typing import Optional, Tuple, Dict, Any, List
+
+import pandas as pd
 from binance.um_futures import UMFutures
-from config import API_KEY, SECRET, USE_TESTNET, SYMBOL, TIMEFRAME, LEVERAGE
+from config import settings
 
 # --- GLOBAL TIME SYNC ---
 _GLOBAL_TIME_OFFSET = 0.0
 _original_time = time.time
 
-def synced_time():
+def synced_time() -> float:
     return _original_time() + _GLOBAL_TIME_OFFSET
 
 # Global monkey-patch
 time.time = synced_time
 
 class ExchangeClient:
-    def __init__(self):
+    def __init__(self) -> None:
         self.logger = logging.getLogger("BinanceBot")
         
         # Determine base URL
         base_url = "https://fapi.binance.com"
-        if USE_TESTNET:
+        if settings.USE_TESTNET:
             base_url = "https://testnet.binancefuture.com"
             
-        self.client = UMFutures(key=API_KEY, secret=SECRET, base_url=base_url)
+        self.client = UMFutures(key=settings.API_KEY, secret=settings.SECRET, base_url=base_url)
         
         # Prepare symbol
-        self.symbol = SYMBOL.replace("/", "").upper()
+        self.symbol: str = settings.SYMBOL.replace("/", "").upper()
         
         # Symbol information (precision)
-        self.qty_precision = 3 # Default for BTCUSDT safety
-        self.price_precision = 2
+        self.qty_precision: int = 3 # Default for BTCUSDT safety
+        self.price_precision: int = 2
         self.get_symbol_info()
         
         # Verify connection
@@ -41,8 +43,12 @@ class ExchangeClient:
             
             # 2. Try to set leverage
             try:
-                self.client.change_leverage(symbol=self.symbol, leverage=LEVERAGE, recvWindow=10000)
-                self.logger.info(f"Leverage set to {LEVERAGE}x for {self.symbol}")
+                self.client.change_leverage(
+                    symbol=self.symbol, 
+                    leverage=settings.LEVERAGE, 
+                    recvWindow=10000
+                )
+                self.logger.info(f"Leverage set to {settings.LEVERAGE}x for {self.symbol}")
             except Exception as lev_e:
                 self.logger.warning(f"Note: Could not set leverage (might be already set): {lev_e}")
             
@@ -53,18 +59,16 @@ class ExchangeClient:
         except Exception as e:
             self.logger.error(f"Critical connection error: {e}")
 
-    def sync_time(self):
+    def sync_time(self) -> None:
         """Calculates the offset between local time and Binance server time."""
         global _GLOBAL_TIME_OFFSET
         try:
             # We must use the original time to calculate the true drift
             actual_local_ms = int(_original_time() * 1000)
             res = self.client.time()
-            server_time = res['serverTime']
+            server_time = int(res['serverTime'])
             
             # Compensation: ServerTime - LocalTime
-            # If server is 10:00:05 and local is 10:00:00, offset is +5s
-            # If server is 10:00:00 and local is 10:00:05, offset is -5s
             diff_ms = server_time - actual_local_ms
             _GLOBAL_TIME_OFFSET = diff_ms / 1000.0
             
@@ -75,7 +79,7 @@ class ExchangeClient:
         except Exception as e:
             self.logger.error(f"Failed to sync time with Binance: {e}")
 
-    def get_symbol_info(self):
+    def get_symbol_info(self) -> None:
         """Fetches quantity and price precision for the current symbol."""
         try:
             info = self.client.exchange_info()
@@ -89,16 +93,20 @@ class ExchangeClient:
         except Exception as e:
             self.logger.error(f"Error fetching symbol info: {e}")
 
-    def fetch_ohlcv(self, limit=100):
+    def fetch_ohlcv(self, limit: int = 100) -> Optional[pd.DataFrame]:
         try:
             try:
-                bars = self.client.klines(self.symbol, interval=TIMEFRAME, limit=limit)
+                bars = self.client.klines(self.symbol, interval=settings.TIMEFRAME, limit=limit)
             except Exception as e:
+                # -1021 is "Timestamp for this request is outside of the recvWindow"
                 if "-1021" in str(e):
                     self.sync_time()
-                    bars = self.client.klines(self.symbol, interval=TIMEFRAME, limit=limit)
+                    bars = self.client.klines(self.symbol, interval=settings.TIMEFRAME, limit=limit)
                 else: raise e
             
+            if not bars:
+                return None
+                
             df = pd.DataFrame(bars, columns=[
                 'timestamp', 'open', 'high', 'low', 'close', 'volume', 
                 'close_time', 'quote_asset_volume', 'number_of_trades', 
@@ -106,19 +114,20 @@ class ExchangeClient:
             ])
             
             # Convert to numeric
-            for col in ['open', 'high', 'low', 'close', 'volume']:
-                df[col] = pd.to_numeric(df[col])
+            cols_to_numeric = ['open', 'high', 'low', 'close', 'volume']
+            df[cols_to_numeric] = df[cols_to_numeric].apply(pd.to_numeric)
                 
+            # Convert timestamp
             df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms').dt.tz_localize('UTC').dt.tz_convert('Asia/Ho_Chi_Minh')
             return df[['timestamp', 'open', 'high', 'low', 'close', 'volume']]
         except Exception as e:
-            self.logger.error(f"Error fetching data for {SYMBOL}: {e}")
+            self.logger.error(f"Error fetching data for {settings.SYMBOL}: {e}")
             return None
 
-    def fetch_history(self, limit=1000):
+    def fetch_history(self, limit: int = 1000) -> Optional[pd.DataFrame]:
         return self.fetch_ohlcv(limit=limit)
 
-    def create_order(self, side, amount):
+    def create_order(self, side: str, amount: float) -> Optional[Dict[str, Any]]:
         try:
             side = side.upper()
             
@@ -151,8 +160,7 @@ class ExchangeClient:
             self.logger.error(f"Error creating market order: {e}")
             return None
 
-
-    def cancel_all_orders(self):
+    def cancel_all_orders(self) -> bool:
         """Cancels all open orders (like old Stop Losses) for the symbol."""
         try:
             self.client.cancel_open_orders(symbol=self.symbol, recvWindow=10000)
@@ -162,7 +170,7 @@ class ExchangeClient:
             self.logger.warning(f"Could not cancel open orders: {e}")
             return False
 
-    def get_balance(self):
+    def get_balance(self) -> Optional[float]:
         try:
             try:
                 account_info = self.client.account(recvWindow=10000)
@@ -182,7 +190,11 @@ class ExchangeClient:
             self.logger.error(f"Error fetching balance: {e}")
             return None
 
-    def get_current_position(self):
+    def get_current_position(self) -> Tuple[float, float]:
+        """
+        Returns:
+            Tuple[float, float]: (Current Position Amount, Entry Price)
+        """
         try:
             # Using get_position_risk is faster and more specific than account()
             try:
@@ -203,11 +215,20 @@ class ExchangeClient:
             self.logger.error(f"Error fetching position: {e}")
             return 0.0, 0.0
 
-    def close_all_positions(self):
+    def close_all_positions(self) -> bool:
         """Closes all positions for the current symbol by placing an offsetting market order."""
         try:
             # Get positions using get_position_risk (more efficient)
-            positions = self.client.get_position_risk(symbol=self.symbol, recvWindow=10000)
+            try:
+                positions = self.client.get_position_risk(symbol=self.symbol, recvWindow=10000)
+            except Exception as e:
+                 # Auto retry once on timestamp error
+                 if "-1021" in str(e):
+                     self.sync_time()
+                     positions = self.client.get_position_risk(symbol=self.symbol, recvWindow=10000)
+                 else:
+                     raise e
+
             for pos in positions:
                 if pos['symbol'] == self.symbol:
                     amt = float(pos['positionAmt'])

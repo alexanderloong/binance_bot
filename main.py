@@ -1,4 +1,4 @@
-# Binance Trading Bot - v1.12.0 (Pure Trend Following)
+# Binance Trading Bot - v1.14.0 (Pure Trend Following)
 import time
 from bot.exchange_client import ExchangeClient
 from bot.strategy import Strategy

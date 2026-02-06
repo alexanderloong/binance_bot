@@ -1,17 +1,27 @@
 import pandas as pd
 import numpy as np
-from config import SUPERTREND_LENGTH, SUPERTREND_FACTOR
+from typing import List
+from config import settings
 
 class DataProcessor:
     @staticmethod
-    def calculate_heikin_ashi(df):
+    def calculate_heikin_ashi(df: pd.DataFrame) -> pd.DataFrame:
+        """
+        Calculates Heikin Ashi candles.
+        
+        Args:
+            df (pd.DataFrame): Input dataframe with open, high, low, close.
+            
+        Returns:
+            pd.DataFrame: DataFrame with added ha_open, ha_high, ha_low, ha_close columns.
+        """
         heikin_ashi_df = df.copy()
         
         # ha_close = (open + high + low + close) / 4
         heikin_ashi_df['ha_close'] = (df['open'] + df['high'] + df['low'] + df['close']) / 4
         
         # ha_open = (prev_ha_open + prev_ha_close) / 2
-        # Use a list to iterate quickly
+        # Use a list to iterate quickly (Vectorization is hard for recursive calculation)
         ha_open = [df['open'].iloc[0]]
         ha_close = heikin_ashi_df['ha_close'].values
         
@@ -25,7 +35,10 @@ class DataProcessor:
         return heikin_ashi_df
 
     @staticmethod
-    def calculate_atr(df, length):
+    def calculate_atr(df: pd.DataFrame, length: int) -> pd.Series:
+        """
+        Calculates Trend (ATR).
+        """
         high = df['high']
         low = df['low']
         close = df['close']
@@ -41,14 +54,20 @@ class DataProcessor:
         return atr
 
     @staticmethod
-    def calculate_adx(df, length):
+    def calculate_adx(df: pd.DataFrame, length: int) -> pd.Series:
+        """
+        Calculates ADX (Average Directional Index).
+        """
         # Standard Wilders DMI calculation
         plus_dm = df['high'].diff()
         minus_dm = -df['low'].diff()
         
+        # Determine movement direction
+        # If +DM < 0, set to 0
         plus_dm[plus_dm < 0] = 0
         minus_dm[minus_dm < 0] = 0
         
+        # Compare +DM vs -DM
         plus_dm_mask = (plus_dm > minus_dm)
         minus_dm_mask = (minus_dm > plus_dm)
         
@@ -66,21 +85,22 @@ class DataProcessor:
         plus_dm_smoothed = plus_dm.ewm(alpha=1/length, adjust=False).mean()
         minus_dm_smoothed = minus_dm.ewm(alpha=1/length, adjust=False).mean()
         
-        plus_di = 100 * (plus_dm_smoothed / atr_smoothed)
-        minus_di = 100 * (minus_dm_smoothed / atr_smoothed)
+        # Avoid division by zero
+        plus_di = 100 * (plus_dm_smoothed / atr_smoothed.replace(0, np.nan))
+        minus_di = 100 * (minus_dm_smoothed / atr_smoothed.replace(0, np.nan))
         
-        dx = 100 * (plus_di - minus_di).abs() / (plus_di + minus_di)
+        dx = 100 * (plus_di - minus_di).abs() / (plus_di + minus_di).replace(0, np.nan)
         adx = dx.ewm(alpha=1/length, adjust=False).mean()
         
-        return adx
+        return adx.fillna(0)
 
     @staticmethod
-    def calculate_ema(df, length=200):
+    def calculate_ema(df: pd.DataFrame, length: int = 200) -> pd.DataFrame:
         df[f'EMA_{length}'] = df['close'].ewm(span=length, adjust=False).mean()
         return df
 
     @staticmethod
-    def calculate_rsi(df, length=14):
+    def calculate_rsi(df: pd.DataFrame, length: int = 14) -> pd.Series:
         delta = df['close'].diff()
         gain = (delta.where(delta > 0, 0))
         loss = (-delta.where(delta < 0, 0))
@@ -88,23 +108,24 @@ class DataProcessor:
         avg_gain = gain.ewm(alpha=1/length, adjust=False).mean()
         avg_loss = loss.ewm(alpha=1/length, adjust=False).mean()
         
-        rs = avg_gain / avg_loss
+        rs = avg_gain / avg_loss.replace(0, np.nan)
         rsi = 100 - (100 / (1 + rs))
-        return rsi
+        return rsi.fillna(50)
 
     @staticmethod
-    def calculate_volume_ma(df, length=20):
+    def calculate_volume_ma(df: pd.DataFrame, length: int = 20) -> pd.DataFrame:
         """Calculate Volume Moving Average."""
         df[f'VOL_MA_{length}'] = df['volume'].rolling(window=length).mean()
         return df
 
     @staticmethod
-    def calculate_supertrend(df, length=SUPERTREND_LENGTH, multiplier=SUPERTREND_FACTOR):
-        # Manual SuperTrend Implementation
-        
+    def calculate_supertrend(df: pd.DataFrame, length: int = settings.SUPERTREND_LENGTH, multiplier: float = settings.SUPERTREND_FACTOR) -> pd.DataFrame:
+        """
+        Calculates SuperTrend indicator.
+        Note: Needs HA candles if intending to run on Heikin Ashi data.
+        """
         df = df.copy()
-        # SuperTrend usually uses HA candles if passed, or standard ones.
-        # Let's use the internal calculate_atr logic but specific to HA for SuperTrend
+        
         high = df['ha_high']
         low = df['ha_low']
         close_ha = df['ha_close']
@@ -113,6 +134,9 @@ class DataProcessor:
         tr1 = high - low
         tr2 = (high - prev_close_ha).abs()
         tr3 = (low - prev_close_ha).abs()
+        
+        # Calculate ATR for SuperTrend
+        # Typically uses ATR of the input source (HA or Normal)
         atr_ha = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1).ewm(alpha=1/length, adjust=False).mean()
         
         hl2 = (df['ha_high'] + df['ha_low']) / 2
@@ -143,7 +167,6 @@ class DataProcessor:
                 
             # Calculate Trend
             # 1 is UpTrend (Green), -1 is DownTrend (Red)
-            # Default to previous trend if no switch
             prev_trend = trend[i-1] if i > 0 else 1
             
             if prev_trend == 1:
@@ -163,7 +186,7 @@ class DataProcessor:
         return df
 
     @staticmethod
-    def check_bearish_divergence(df, lookback=10, min_rsi=60):
+    def check_bearish_divergence(df: pd.DataFrame, lookback: int = 10, min_rsi: int = 60) -> bool:
         """
         Detects Bearish Divergence:
         - Price makes Higher High
@@ -178,13 +201,14 @@ class DataProcessor:
         rsi = df['RSI'].values
         
         # We look at historical peaks within the window ending at -2 (last closed candle)
+        # Because index -1 is the current forming candle
         current_idx = len(df) - 2
         
         start_scan = current_idx - lookback
         if start_scan < 0: start_scan = 0
         
         # Find peaks indices: i where rsi[i] > rsi[i-1] and rsi[i] > rsi[i+1]
-        peak_indices = []
+        peak_indices: List[int] = []
         
         for i in range(start_scan, current_idx): 
             # safety check for boundaries

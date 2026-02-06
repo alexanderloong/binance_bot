@@ -1,10 +1,11 @@
 import os
 from dotenv import load_dotenv
+from dataclasses import dataclass
 
 # ==========================================
 # BINANCE TRADING BOT CONFIGURATION
-# Version: 1.13.0
-# Date: 2026-02-04
+# Version: 1.14.0
+# Date: 2026-02-06
 # Strategy: Pure Trend Following (SuperTrend + EMA + ADX + RSI + Vol)
 # ==========================================
 
@@ -12,60 +13,83 @@ from dotenv import load_dotenv
 env_path = os.path.join(os.path.dirname(__file__), '.env')
 load_dotenv(env_path)
 
-API_KEY = os.getenv("API_KEY")
-SECRET = os.getenv("SECRET")
-USE_TESTNET = os.getenv("USE_TESTNET", "True").lower() == "true"
+@dataclass(frozen=True)
+class TradingConfig:
+    # Credentials
+    API_KEY: str = os.getenv("API_KEY", "")
+    SECRET: str = os.getenv("SECRET", "")
+    USE_TESTNET: bool = os.getenv("USE_TESTNET", "True").lower() == "true"
 
-# ------------------------------------------
-# STRATEGY SETTINGS
-# ------------------------------------------
-SYMBOL = "BTC/USDT"
-TIMEFRAME = "15m"             # Timeframe: 15m (Balance between noise and trend)
+    # Strategy Settings
+    SYMBOL: str = "BTC/USDT"
+    TIMEFRAME: str = "15m"
+    
+    # Trend Indicators
+    SUPERTREND_LENGTH: int = 18
+    SUPERTREND_FACTOR: float = 1.45
+    EMA_LENGTH: int = 102
+    
+    # Risk Management
+    LEVERAGE: int = 10
+    POSITION_SIZE_PERCENT: float = 0.2
+    
+    # Safety
+    MAX_TRADES_PER_HOUR: int = 5
+    
+    # Filters
+    ADX_LENGTH: int = 14
+    ADX_THRESHOLD: int = 18
+    ATR_LENGTH: int = 14
+    ATR_MULTIPLIER: float = 0.7
+    
+    # Momentum (RSI)
+    RSI_LENGTH: int = 14
+    RSI_OVERBOUGHT: int = 64
+    RSI_OVERSOLD: int = 36
+    RSI_LONG_THRESHOLD: int = 53
+    
+    # Volume
+    VOLUME_MA_LENGTH: int = 177
+    
+    # Rule 2: EMA Slope
+    EMA_SLOPE_EMA_LENGTH: int = 200
+    EMA_SLOPE_LOOKBACK: int = 20
+    EMA_SLOPE_THRESHOLD: float = 0.002
+    REDUCED_POSITION_SIZE_PERCENT: float = 0.15
+    
+    # Rule 3: RSI Divergence
+    RSI_DIV_LOOKBACK: int = 14
+    RSI_DIV_MIN_RSI: int = 78
+    RSI_DIV_PARTIAL_CLOSE_PCT: float = 0.1
 
-# Trend Indicators
-# Optimized for capturing major swings while filtering chop
-SUPERTREND_LENGTH = 18        # Length for ATR calculation in SuperTrend
-SUPERTREND_FACTOR = 1.45       # Multiplier for Band width
-EMA_LENGTH = 102              # EMA Baseline (Price > EMA = Bullish)
+# Instantiate global settings
+settings = TradingConfig()
 
-# Risk Management
-LEVERAGE = 10                  # Leverage multiplier
-POSITION_SIZE_PERCENT = 0.2     # 100% of Equity per Trade
-
-# Safety
-MAX_TRADES_PER_HOUR = 5       # API Rate Limit Protection
-
-# Filters
-# Additional conditions to improve Win/Loss Quality
-ADX_LENGTH = 14               
-ADX_THRESHOLD = 18            # Trend Strength (Buy only if ADX > 18)
-
-ATR_LENGTH = 14
-ATR_MULTIPLIER = 0.7         # Tight SL (0.8x ATR) to cut losses fast
-
-# Momentum (RSI)
-# Avoid entering at extreme exhaustion points
-RSI_LENGTH = 14
-RSI_OVERBOUGHT = 64           # Long limit
-RSI_OVERSOLD = 36             # Short limit
-RSI_LONG_THRESHOLD = 53       # Min RSI for Long (Trend Filter)
-
-# Volume
-# Confirm breakout validity
-VOLUME_MA_LENGTH = 177        # Long-term Volume MA to detect anomalous activity
-
-# ------------------------------------------
-# EXIT SETTINGS
-# ------------------------------------------
-# Pure Trend Following: No Partial TP, ride until reversal.
-# Stop Loss is handled dynamically by ATR logic in bot
-
-# Rule 2: EMA Slope sizing
-EMA_SLOPE_EMA_LENGTH = 200    # User requested EMA200 for slope
-EMA_SLOPE_LOOKBACK = 20       # Lookback for slope calc
-EMA_SLOPE_THRESHOLD = 0.002   # 0.3% slope threshold (H1 recommendation)
-REDUCED_POSITION_SIZE_PERCENT = 0.15 # Reduced size (10%) when slope is flat
-# Rule 3: RSI Divergence (Bearish) - Exit/Skip Long
-RSI_DIV_LOOKBACK = 14         # Lookback candles to find peaks
-RSI_DIV_MIN_RSI = 78          # Minimum RSI to consider divergence
-RSI_DIV_PARTIAL_CLOSE_PCT = 0.1 # Close 50% position on divergence
+# Expose global variables for backward compatibility
+API_KEY = settings.API_KEY
+SECRET = settings.SECRET
+USE_TESTNET = settings.USE_TESTNET
+SYMBOL = settings.SYMBOL
+TIMEFRAME = settings.TIMEFRAME
+SUPERTREND_LENGTH = settings.SUPERTREND_LENGTH
+SUPERTREND_FACTOR = settings.SUPERTREND_FACTOR
+EMA_LENGTH = settings.EMA_LENGTH
+LEVERAGE = settings.LEVERAGE
+POSITION_SIZE_PERCENT = settings.POSITION_SIZE_PERCENT
+MAX_TRADES_PER_HOUR = settings.MAX_TRADES_PER_HOUR
+ADX_LENGTH = settings.ADX_LENGTH
+ADX_THRESHOLD = settings.ADX_THRESHOLD
+ATR_LENGTH = settings.ATR_LENGTH
+ATR_MULTIPLIER = settings.ATR_MULTIPLIER
+RSI_LENGTH = settings.RSI_LENGTH
+RSI_OVERBOUGHT = settings.RSI_OVERBOUGHT
+RSI_OVERSOLD = settings.RSI_OVERSOLD
+RSI_LONG_THRESHOLD = settings.RSI_LONG_THRESHOLD
+VOLUME_MA_LENGTH = settings.VOLUME_MA_LENGTH
+EMA_SLOPE_EMA_LENGTH = settings.EMA_SLOPE_EMA_LENGTH
+EMA_SLOPE_LOOKBACK = settings.EMA_SLOPE_LOOKBACK
+EMA_SLOPE_THRESHOLD = settings.EMA_SLOPE_THRESHOLD
+REDUCED_POSITION_SIZE_PERCENT = settings.REDUCED_POSITION_SIZE_PERCENT
+RSI_DIV_LOOKBACK = settings.RSI_DIV_LOOKBACK
+RSI_DIV_MIN_RSI = settings.RSI_DIV_MIN_RSI
+RSI_DIV_PARTIAL_CLOSE_PCT = settings.RSI_DIV_PARTIAL_CLOSE_PCT
