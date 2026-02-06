@@ -6,7 +6,8 @@ from config import (
     ADX_LENGTH, ADX_THRESHOLD, ATR_LENGTH, ATR_MULTIPLIER, 
     MAX_TRADES_PER_HOUR, POSITION_SIZE_PERCENT, LEVERAGE,
     RSI_LENGTH, RSI_OVERBOUGHT, RSI_OVERSOLD, RSI_LONG_THRESHOLD,
-    VOLUME_MA_LENGTH
+    VOLUME_MA_LENGTH,
+    EMA_SLOPE_EMA_LENGTH, EMA_SLOPE_LOOKBACK, EMA_SLOPE_THRESHOLD, REDUCED_POSITION_SIZE_PERCENT
 )
 from .data_processor import DataProcessor
 from .utils import parse_timeframe_to_seconds
@@ -108,6 +109,7 @@ class Strategy:
         df_st['ATR'] = DataProcessor.calculate_atr(df, length=ATR_LENGTH)
         df_st['RSI'] = DataProcessor.calculate_rsi(df, length=RSI_LENGTH)
         df_st = DataProcessor.calculate_volume_ma(df_st, length=VOLUME_MA_LENGTH)
+        df_st[f'EMA_{EMA_SLOPE_EMA_LENGTH}'] = DataProcessor.calculate_ema(df_st, length=EMA_SLOPE_EMA_LENGTH)[f'EMA_{EMA_SLOPE_EMA_LENGTH}']
         df_final = df_st
         
         # Get the last closed candle (second to last row, as last row is unfinished)
@@ -130,7 +132,12 @@ class Strategy:
         current_volume = last_candle['volume']
         candle_time = last_candle['timestamp'].strftime('%d-%m-%Y %H:%M:%S')
         
-        self.logger.info(f"Market Data: {candle_time} | Close: {close_price} | Trend: {current_trend} | EMA{EMA_LENGTH}: {ema_val:.2f} | ADX: {adx_val:.2f} | ATR: {atr_val:.2f} | RSI: {rsi_val:.2f} | Vol: {current_volume:.0f} (MA: {vol_ma_val:.0f})")
+        ema_slope_val = last_candle[f'EMA_{EMA_SLOPE_EMA_LENGTH}']
+        ema_slope_prev = df_final.iloc[-(EMA_SLOPE_LOOKBACK + 1)][f'EMA_{EMA_SLOPE_EMA_LENGTH}']
+        ema_slope_pct = (ema_slope_val - ema_slope_prev) / ema_slope_prev if ema_slope_prev != 0 else 0
+        is_flat_slope = abs(ema_slope_pct) < EMA_SLOPE_THRESHOLD
+
+        self.logger.info(f"Market Data: {candle_time} | Close: {close_price} | Trend: {current_trend} | EMA{EMA_LENGTH}: {ema_val:.2f} | ADX: {adx_val:.2f} | ATR: {atr_val:.2f} | RSI: {rsi_val:.2f} | Vol: {current_volume:.0f} (MA: {vol_ma_val:.0f}) | EMA{EMA_SLOPE_EMA_LENGTH} Slope: {ema_slope_pct*100:.3f}% ({'FLAT' if is_flat_slope else 'STEEP'})")
 
         # --- STALENESS CHECK (Only skip TRADE logic, not analysis logging) ---
         STALE_TOLERANCE = 120 
@@ -195,7 +202,12 @@ class Strategy:
         if signal:
             if current_pos_amt == 0:
                 self.logger.info(f"SIGNAL DETECTED: {signal} (Position is Empty)")
-                self.open_position(signal, close_price, atr_val)
+                # Dynamic Position Sizing based on EMA Slope
+                actual_pos_size = REDUCED_POSITION_SIZE_PERCENT if is_flat_slope else POSITION_SIZE_PERCENT
+                if is_flat_slope:
+                    self.logger.info(f"⚠️ EMA{EMA_SLOPE_EMA_LENGTH} is FLAT (Slope: {ema_slope_pct*100:.3f}% < {EMA_SLOPE_THRESHOLD*100}%). Reducing size to {actual_pos_size*100}%.")
+                
+                self.open_position(signal, close_price, atr_val, pos_size_pct=actual_pos_size)
             else:
                 self.logger.info(f"SIGNAL DETECTED: {signal}, but already in position ({current_pos_amt}). Skipping.")
         else:
@@ -212,7 +224,7 @@ class Strategy:
     # def partial_close_position(self, current_amt):
     #     ...
 
-    def open_position(self, side, price, atr_val):
+    def open_position(self, side, price, atr_val, pos_size_pct=POSITION_SIZE_PERCENT):
         
         # Safety Check: Rate Limit
         if not self.check_rate_limit():
@@ -227,10 +239,10 @@ class Strategy:
 
             # Calculate trade amount using leverage
             # Amount in USDT (Buying Power) = Balance * Position_Size % * Leverage
-            amount_usdt = balance * POSITION_SIZE_PERCENT * LEVERAGE
+            amount_usdt = balance * pos_size_pct * LEVERAGE
             trade_amount = amount_usdt / price
             
-            self.logger.info(f"Opening {side} position at {price} (Size: {POSITION_SIZE_PERCENT*100}% of Balance: {balance} USDT, Leverage: {LEVERAGE}x -> {trade_amount:.4f} BTC)")
+            self.logger.info(f"Opening {side} position at {price} (Size: {pos_size_pct*100}% of Balance: {balance} USDT, Leverage: {LEVERAGE}x -> {trade_amount:.4f} BTC)")
             
             if side == 'LONG':
                  self.stop_loss_price = price - (atr_val * ATR_MULTIPLIER)

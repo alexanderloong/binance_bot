@@ -59,3 +59,9 @@ VOLUME_MA_LENGTH = 177        # Long-term Volume MA to detect anomalous activity
 # ------------------------------------------
 # Pure Trend Following: No Partial TP, ride until reversal.
 # Stop Loss is handled dynamically by ATR logic in bot
+
+# Rule 2: EMA Slope sizing
+EMA_SLOPE_EMA_LENGTH = 200    # User requested EMA200 for slope
+EMA_SLOPE_LOOKBACK = 20       # Lookback for slope calc
+EMA_SLOPE_THRESHOLD = 0.002   # 0.3% slope threshold (H1 recommendation)
+REDUCED_POSITION_SIZE_PERCENT = 0.15 # Reduced size (10%) when slope is flat

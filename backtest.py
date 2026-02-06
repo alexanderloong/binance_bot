@@ -11,7 +11,8 @@ from config import (
     POSITION_SIZE_PERCENT, LEVERAGE, ADX_LENGTH, ADX_THRESHOLD, 
     ATR_LENGTH, ATR_MULTIPLIER,
     RSI_LENGTH, RSI_OVERBOUGHT, RSI_OVERSOLD, RSI_LONG_THRESHOLD,
-    VOLUME_MA_LENGTH
+    VOLUME_MA_LENGTH,
+    EMA_SLOPE_EMA_LENGTH, EMA_SLOPE_LOOKBACK, EMA_SLOPE_THRESHOLD, REDUCED_POSITION_SIZE_PERCENT
 )
 
 LIMIT = 150000
@@ -19,7 +20,8 @@ WORKERS = 5
 SLEEP = 1.5
 GEN_CHART = True
 
-def simulate(df, use_ema_filter=True, st_length=SUPERTREND_LENGTH, st_factor=SUPERTREND_FACTOR, sl_multiplier=ATR_MULTIPLIER, adx_threshold=ADX_THRESHOLD, use_rsi_filter=True, rsi_overbought=RSI_OVERBOUGHT, rsi_oversold=RSI_OVERSOLD, rsi_long_threshold=RSI_LONG_THRESHOLD, use_volume_filter=True, volume_ma_length=VOLUME_MA_LENGTH, leverage=LEVERAGE, position_size_percent=POSITION_SIZE_PERCENT):
+def simulate(df, use_ema_filter=True, st_length=SUPERTREND_LENGTH, st_factor=SUPERTREND_FACTOR, sl_multiplier=ATR_MULTIPLIER, adx_threshold=ADX_THRESHOLD, use_rsi_filter=True, rsi_overbought=RSI_OVERBOUGHT, rsi_oversold=RSI_OVERSOLD, rsi_long_threshold=RSI_LONG_THRESHOLD, use_volume_filter=True, volume_ma_length=VOLUME_MA_LENGTH, leverage=LEVERAGE, position_size_percent=POSITION_SIZE_PERCENT,
+             use_ema_slope_sizing=True, ema_slope_threshold=EMA_SLOPE_THRESHOLD, reduced_size_percent=REDUCED_POSITION_SIZE_PERCENT, slope_ema_length=EMA_SLOPE_EMA_LENGTH, slope_lookback=EMA_SLOPE_LOOKBACK):
     initial_balance = 1000
     balance = initial_balance
     position_amt = 0 
@@ -151,7 +153,23 @@ def simulate(df, use_ema_filter=True, st_length=SUPERTREND_LENGTH, st_factor=SUP
                 signal = 'SHORT'
             
         if signal and position_amt == 0:
-            trade_value = balance * position_size_percent * leverage
+            # Dynamic Sizing based on EMA Slope
+            actual_pos_size = position_size_percent
+            
+            if use_ema_slope_sizing and f'EMA_{slope_ema_length}' in df.columns:
+                # Calculate slope using past data from the dataframe directly to be fast.
+                # However, df.iloc[i-slope_lookback] is accurate. 
+                # Check for bounds
+                if i > slope_lookback:
+                    ema_curr = current_candle[f'EMA_{slope_ema_length}']
+                    ema_prev = df.iloc[i - slope_lookback][f'EMA_{slope_ema_length}']
+                    
+                    if ema_prev != 0:
+                         slope_pct = (ema_curr - ema_prev) / ema_prev
+                         if abs(slope_pct) < ema_slope_threshold:
+                             actual_pos_size = reduced_size_percent
+
+            trade_value = balance * actual_pos_size * leverage
             
             # Entry Fee
             entry_fee = trade_value * commission_rate
@@ -423,11 +441,12 @@ def run_backtest():
     df_st['ATR'] = DataProcessor.calculate_atr(df, length=ATR_LENGTH)
     df_st['RSI'] = DataProcessor.calculate_rsi(df, length=RSI_LENGTH)
     df_st = DataProcessor.calculate_volume_ma(df_st, length=VOLUME_MA_LENGTH)
+    df_st[f'EMA_{EMA_SLOPE_EMA_LENGTH}'] = DataProcessor.calculate_ema(df_st, length=EMA_SLOPE_EMA_LENGTH)[f'EMA_{EMA_SLOPE_EMA_LENGTH}']
     df_final = df_st
     
     # Run simulation with verbose output (we will modify simulate to return trades and we print them)
     # Or just print after simulation
-    res, trades = simulate(df_final, use_ema_filter=True, use_rsi_filter=True, use_volume_filter=True)
+    res, trades = simulate(df_final, use_ema_filter=True, use_rsi_filter=True, use_volume_filter=True, use_ema_slope_sizing=True)
     
     print("\n--- Trade History ---")
     for t in trades:
