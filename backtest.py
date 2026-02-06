@@ -273,6 +273,10 @@ def simulate(df, use_ema_filter=True, st_length=SUPERTREND_LENGTH, st_factor=SUP
         if 'OPEN' in t['type']:
             current_trade_pnl = t['pnl'] # Entry fee
             is_open = True
+        elif 'PARTIAL' in t['type']:
+            # Add partial pnl but keep trade open
+            if is_open:
+                current_trade_pnl += t['pnl']
         elif any(x in t['type'] for x in ['CLOSE', 'STOP_LOSS', 'FINAL_CLOSE', 'LIQUIDATION']):
             current_trade_pnl += t['pnl']
             if is_open:
