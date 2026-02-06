@@ -30,8 +30,8 @@ class TradingConfig:
     EMA_LENGTH: int = 102
     
     # Risk Management
-    LEVERAGE: int = 9
-    POSITION_SIZE_PERCENT: float = 0.15
+    LEVERAGE: int = 10
+    POSITION_SIZE_PERCENT: float = 0.2
     
     # Safety
     MAX_TRADES_PER_HOUR: int = 5
