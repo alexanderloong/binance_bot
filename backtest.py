@@ -12,7 +12,10 @@ from config import (
     ATR_LENGTH, ATR_MULTIPLIER,
     RSI_LENGTH, RSI_OVERBOUGHT, RSI_OVERSOLD, RSI_LONG_THRESHOLD,
     VOLUME_MA_LENGTH,
-    EMA_SLOPE_EMA_LENGTH, EMA_SLOPE_LOOKBACK, EMA_SLOPE_THRESHOLD, REDUCED_POSITION_SIZE_PERCENT
+    RSI_LENGTH, RSI_OVERBOUGHT, RSI_OVERSOLD, RSI_LONG_THRESHOLD,
+    VOLUME_MA_LENGTH,
+    EMA_SLOPE_EMA_LENGTH, EMA_SLOPE_LOOKBACK, EMA_SLOPE_THRESHOLD, REDUCED_POSITION_SIZE_PERCENT,
+    RSI_DIV_LOOKBACK, RSI_DIV_MIN_RSI, RSI_DIV_PARTIAL_CLOSE_PCT
 )
 
 LIMIT = 150000
@@ -21,7 +24,8 @@ SLEEP = 1.5
 GEN_CHART = True
 
 def simulate(df, use_ema_filter=True, st_length=SUPERTREND_LENGTH, st_factor=SUPERTREND_FACTOR, sl_multiplier=ATR_MULTIPLIER, adx_threshold=ADX_THRESHOLD, use_rsi_filter=True, rsi_overbought=RSI_OVERBOUGHT, rsi_oversold=RSI_OVERSOLD, rsi_long_threshold=RSI_LONG_THRESHOLD, use_volume_filter=True, volume_ma_length=VOLUME_MA_LENGTH, leverage=LEVERAGE, position_size_percent=POSITION_SIZE_PERCENT,
-             use_ema_slope_sizing=True, ema_slope_threshold=EMA_SLOPE_THRESHOLD, reduced_size_percent=REDUCED_POSITION_SIZE_PERCENT, slope_ema_length=EMA_SLOPE_EMA_LENGTH, slope_lookback=EMA_SLOPE_LOOKBACK):
+             use_ema_slope_sizing=True, ema_slope_threshold=EMA_SLOPE_THRESHOLD, reduced_size_percent=REDUCED_POSITION_SIZE_PERCENT, slope_ema_length=EMA_SLOPE_EMA_LENGTH, slope_lookback=EMA_SLOPE_LOOKBACK,
+             use_divergence_filter=True, div_lookback=RSI_DIV_LOOKBACK, div_min_rsi=RSI_DIV_MIN_RSI, div_partial_pct=RSI_DIV_PARTIAL_CLOSE_PCT):
     initial_balance = 1000
     balance = initial_balance
     position_amt = 0 
@@ -35,6 +39,10 @@ def simulate(df, use_ema_filter=True, st_length=SUPERTREND_LENGTH, st_factor=SUP
     st_dir_col = f"SUPERTd_{st_length}_{st_factor}"
     # Use the custom EMA column if provided (for comparison), otherwise default to config EMA
     ema_col = 'EMA_FILTER' if 'EMA_FILTER' in df.columns else f'EMA_{EMA_LENGTH}'
+    
+    # Pre-convert columns to numpy arrays for much faster access in the loop (esp for divergence check)
+    arr_high = df['high'].values
+    arr_rsi = df['RSI'].values
 
     for i in range(1, len(df)):
         current_candle = df.iloc[i]
@@ -54,6 +62,36 @@ def simulate(df, use_ema_filter=True, st_length=SUPERTREND_LENGTH, st_factor=SUP
             # For last candle, estimate by adding timeframe duration
             tf_seconds = parse_timeframe_to_seconds(TIMEFRAME)
             execution_time = timestamp + pd.Timedelta(seconds=tf_seconds)
+        
+        # --- DIVERGENCE CHECK ---
+        bearish_div = False
+        if use_divergence_filter and i > div_lookback + 5:
+            # Check for peaks in window [i-div_lookback : i]
+            # Since i is current candle, we treat it as "just closed" for analysis? 
+            # In backtest loop, 'i' is the candle we just received. 
+            # Strategy uses current_idx = len - 2 (last closed). 
+            # Here 'current_candle' is i. So we look at history ending at i.
+            
+            # Find peaks
+            curr_idx = i
+            start_scan = curr_idx - div_lookback
+            
+            peak_indices = []
+            for k in range(start_scan, curr_idx):
+                # k is peak if rsi[k] > rsi[k-1] and rsi[k] > rsi[k+1]
+                # We need bounds check. k+1 must be <= curr_idx
+                if arr_rsi[k] > arr_rsi[k-1] and arr_rsi[k] > arr_rsi[k+1]:
+                    if arr_rsi[k] > div_min_rsi:
+                        peak_indices.append(k)
+            
+            if len(peak_indices) >= 2:
+                p2_idx = peak_indices[-1]
+                p1_idx = peak_indices[-2]
+                
+                # Check recentness: P2 must be within last 3 bars
+                if curr_idx - p2_idx <= 3:
+                     if arr_high[p2_idx] > arr_high[p1_idx] and arr_rsi[p2_idx] < arr_rsi[p1_idx]:
+                         bearish_div = True
         
 
         # 0. LIQUIDATION CHECK
@@ -125,6 +163,23 @@ def simulate(df, use_ema_filter=True, st_length=SUPERTREND_LENGTH, st_factor=SUP
             trades.append({'time': execution_time, 'type': 'STOP_LOSS_SHORT', 'price': stop_loss_price, 'pnl': pnl})
             position_amt = 0
 
+        # 1c. PARTIAL CLOSE & BE on Divergence
+        if position_amt > 0 and bearish_div:
+            # Check if already at BE (approx)
+            if stop_loss_price < entry_price: 
+                 # 1. Partial Close
+                 close_qty = abs(position_amt) * div_partial_pct
+                 raw_pnl = (price - entry_price) * close_qty
+                 fee = (price * close_qty) * commission_rate
+                 pnl = raw_pnl - fee
+                 balance += pnl
+                 position_amt -= close_qty
+                 trades.append({'time': execution_time, 'type': 'PARTIAL_DIV', 'price': price, 'pnl': pnl})
+                 
+                 # 2. Move SL to BE
+                 stop_loss_price = entry_price * 1.001
+
+
         # 2. ENTRY LOGIC
         is_uptrend = price > ema_val if use_ema_filter else True
         is_downtrend = price < ema_val if use_ema_filter else True
@@ -146,7 +201,9 @@ def simulate(df, use_ema_filter=True, st_length=SUPERTREND_LENGTH, st_factor=SUP
         
         signal = None
         if curr_trend == 1 and prev_trend == -1 and is_uptrend:
-            if is_trending and rsi_long_ok and vol_ok:
+            if bearish_div:
+                pass # Block Long
+            elif is_trending and rsi_long_ok and vol_ok:
                 signal = 'LONG'
         elif curr_trend == -1 and prev_trend == 1 and is_downtrend:
             if is_trending and rsi_short_ok and vol_ok:
@@ -446,7 +503,7 @@ def run_backtest():
     
     # Run simulation with verbose output (we will modify simulate to return trades and we print them)
     # Or just print after simulation
-    res, trades = simulate(df_final, use_ema_filter=True, use_rsi_filter=True, use_volume_filter=True, use_ema_slope_sizing=True)
+    res, trades = simulate(df_final, use_ema_filter=True, use_rsi_filter=True, use_volume_filter=True, use_ema_slope_sizing=True, use_divergence_filter=True)
     
     print("\n--- Trade History ---")
     for t in trades:

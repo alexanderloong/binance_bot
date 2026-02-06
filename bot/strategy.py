@@ -7,7 +7,10 @@ from config import (
     MAX_TRADES_PER_HOUR, POSITION_SIZE_PERCENT, LEVERAGE,
     RSI_LENGTH, RSI_OVERBOUGHT, RSI_OVERSOLD, RSI_LONG_THRESHOLD,
     VOLUME_MA_LENGTH,
-    EMA_SLOPE_EMA_LENGTH, EMA_SLOPE_LOOKBACK, EMA_SLOPE_THRESHOLD, REDUCED_POSITION_SIZE_PERCENT
+    RSI_LENGTH, RSI_OVERBOUGHT, RSI_OVERSOLD, RSI_LONG_THRESHOLD,
+    VOLUME_MA_LENGTH,
+    EMA_SLOPE_EMA_LENGTH, EMA_SLOPE_LOOKBACK, EMA_SLOPE_THRESHOLD, REDUCED_POSITION_SIZE_PERCENT,
+    RSI_DIV_LOOKBACK, RSI_DIV_MIN_RSI, RSI_DIV_PARTIAL_CLOSE_PCT
 )
 from .data_processor import DataProcessor
 from .utils import parse_timeframe_to_seconds
@@ -139,6 +142,11 @@ class Strategy:
 
         self.logger.info(f"Market Data: {candle_time} | Close: {close_price} | Trend: {current_trend} | EMA{EMA_LENGTH}: {ema_val:.2f} | ADX: {adx_val:.2f} | ATR: {atr_val:.2f} | RSI: {rsi_val:.2f} | Vol: {current_volume:.0f} (MA: {vol_ma_val:.0f}) | EMA{EMA_SLOPE_EMA_LENGTH} Slope: {ema_slope_pct*100:.3f}% ({'FLAT' if is_flat_slope else 'STEEP'})")
 
+        # --- BEARISH DIVERGENCE CHECK (Rule 3) ---
+        bearish_div = DataProcessor.check_bearish_divergence(df_final, lookback=RSI_DIV_LOOKBACK, min_rsi=RSI_DIV_MIN_RSI)
+        if bearish_div:
+            self.logger.info(f"⚠️ BEARISH DIVERGENCE DETECTED (RSI Peaks in last {RSI_DIV_LOOKBACK} candles)!")
+
         # --- STALENESS CHECK (Only skip TRADE logic, not analysis logging) ---
         STALE_TOLERANCE = 120 
         
@@ -176,12 +184,35 @@ class Strategy:
         elif current_pos_amt < 0 and current_trend == 1: # Existing Short & Trend turns Green
              self.logger.info(f"Trend flipped to GREEN. Closing SHORT position ({current_pos_amt}).")
              self.close_all_positions()
+             self.close_all_positions()
              current_pos_amt = 0
+        
+        # 1b. RSI DIVERGENCE - PARTIAL CLOSE & BE
+        elif current_pos_amt > 0 and bearish_div:
+             # Only if we haven't already moved to BE (roughly)
+             # If SL is below entry, we are not at BE.
+             # Or if we just want to execute this ONCE per divergence instance. 
+             # Simpler: If SL < Entry (Normal SL), do the adjustment.
+             is_sl_at_be = self.stop_loss_price is not None and self.stop_loss_price >= entry_price
+             
+             if not is_sl_at_be:
+                 self.logger.info(f"Bearish Divergence on Long. Action: Close {RSI_DIV_PARTIAL_CLOSE_PCT*100}% & Move SL to BE.")
+                 
+                 # 1. Partial Close
+                 close_amt = abs(current_pos_amt) * RSI_DIV_PARTIAL_CLOSE_PCT
+                 self.partial_close_position(close_amt, 'sell')
+                 
+                 # 2. Move SL to Break Even (plus small buffer?)
+                 self.stop_loss_price = entry_price * 1.001 # 0.1% buffer
+                 self.logger.info(f"Moved Software SL to Break Even: {self.stop_loss_price}")
 
         # 2. LOGIC MỞ LỆNH (Entry Filtered)
         signal = None
         if current_trend == 1 and previous_trend == -1 and is_uptrend_long:
-            if is_trending and rsi_long_ok and vol_ok:
+            if bearish_div:
+                self.logger.info("LONG signal detected but BLOCKED by Bearish Divergence.")
+                signal = None
+            elif is_trending and rsi_long_ok and vol_ok:
                 signal = 'LONG'
             else:
                 reasons = []
@@ -221,8 +252,14 @@ class Strategy:
             self.stop_loss_price = None
 
     # PARTIAL CLOSE - DISABLED (Pure Trend Following)
-    # def partial_close_position(self, current_amt):
-    #     ...
+    def partial_close_position(self, quantity, side):
+        self.logger.info(f"Partially closing {quantity:.4f} ({side})...")
+        try:
+             order = self.client.create_order(side, quantity)
+             if order:
+                 self.logger.info("Partial close successful.")
+        except Exception as e:
+             self.logger.error(f"Failed to partial close: {e}")
 
     def open_position(self, side, price, atr_val, pos_size_pct=POSITION_SIZE_PERCENT):
         

@@ -65,3 +65,7 @@ EMA_SLOPE_EMA_LENGTH = 200    # User requested EMA200 for slope
 EMA_SLOPE_LOOKBACK = 20       # Lookback for slope calc
 EMA_SLOPE_THRESHOLD = 0.002   # 0.3% slope threshold (H1 recommendation)
 REDUCED_POSITION_SIZE_PERCENT = 0.15 # Reduced size (10%) when slope is flat
+# Rule 3: RSI Divergence (Bearish) - Exit/Skip Long
+RSI_DIV_LOOKBACK = 14         # Lookback candles to find peaks
+RSI_DIV_MIN_RSI = 78          # Minimum RSI to consider divergence
+RSI_DIV_PARTIAL_CLOSE_PCT = 0.1 # Close 50% position on divergence

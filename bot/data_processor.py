@@ -161,3 +161,61 @@ class DataProcessor:
         df[f'SUPERTd_{length}_{multiplier}'] = trend
         
         return df
+
+    @staticmethod
+    def check_bearish_divergence(df, lookback=10, min_rsi=60):
+        """
+        Detects Bearish Divergence:
+        - Price makes Higher High
+        - RSI makes Lower High
+        - Current RSI Peak > min_rsi
+        Returns True if divergence is detected on the last closed candle.
+        """
+        if len(df) < lookback + 5:
+            return False
+
+        highs = df['high'].values
+        rsi = df['RSI'].values
+        
+        # We look at historical peaks within the window ending at -2 (last closed candle)
+        current_idx = len(df) - 2
+        
+        start_scan = current_idx - lookback
+        if start_scan < 0: start_scan = 0
+        
+        # Find peaks indices: i where rsi[i] > rsi[i-1] and rsi[i] > rsi[i+1]
+        peak_indices = []
+        
+        for i in range(start_scan, current_idx): 
+            # safety check for boundaries
+            if i - 1 >= 0 and i + 1 < len(rsi):
+                if rsi[i] > rsi[i-1] and rsi[i] > rsi[i+1]:
+                    if rsi[i] > min_rsi:
+                        peak_indices.append(i)
+                    
+        if len(peak_indices) < 2:
+            return False
+            
+        # P2 is the most recent peak
+        p2_idx = peak_indices[-1]
+        # P1 is the previous peak
+        p1_idx = peak_indices[-2]
+        
+        # Check if P2 is "recent enough" to effectively be the "current" signal
+        # E.g., if peak happened 1-3 bars ago, we consider it active divergence
+        if current_idx - p2_idx > 3:
+            return False
+            
+        price_p2 = highs[p2_idx]
+        rsi_p2 = rsi[p2_idx]
+        
+        price_p1 = highs[p1_idx]
+        rsi_p1 = rsi[p1_idx]
+        
+        # Bearish Divergence:
+        # Price Higher High: P2_price > P1_price
+        # RSI Lower High: P2_rsi < P1_rsi
+        if price_p2 > price_p1 and rsi_p2 < rsi_p1:
+            return True
+            
+        return False
