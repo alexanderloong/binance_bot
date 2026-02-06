@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.15.0] - 2026-02-06
+### Added
+- **Production Anchor**: This version is designated as the stable production anchor for 2026.
+### Fixed
+- **Statistics Accuracy**: Fixed `backtest.py` logic to correctly aggregate `PARTIAL_DIV` PnL into trade cycles, ensuring Win Rate and Profit Factor match actual data performance.
+### Changed
+- **Config Finalization**: Re-established production-grade risk parameters (Leverage 10x, Position Size 20%).
+
 ## [1.14.1] - 2026-02-06
 
 ### Added
