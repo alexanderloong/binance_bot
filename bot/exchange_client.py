@@ -42,6 +42,7 @@ class ExchangeClient:
             self.logger.info("Connection to Binance API established.")
             
             # 2. Try to set leverage
+            # 2. Try to set leverage
             try:
                 self.client.change_leverage(
                     symbol=self.symbol, 
@@ -50,7 +51,20 @@ class ExchangeClient:
                 )
                 self.logger.info(f"Leverage set to {settings.LEVERAGE}x for {self.symbol}")
             except Exception as lev_e:
-                self.logger.warning(f"Note: Could not set leverage (might be already set): {lev_e}")
+                if "-1021" in str(lev_e):
+                    self.logger.warning("Timestamp error (-1021) on leverage set. Syncing time and retrying...")
+                    self.sync_time()
+                    try:
+                        self.client.change_leverage(
+                            symbol=self.symbol, 
+                            leverage=settings.LEVERAGE, 
+                            recvWindow=10000
+                        )
+                        self.logger.info(f"Leverage set to {settings.LEVERAGE}x for {self.symbol}")
+                    except Exception as lev_e_retry:
+                         self.logger.warning(f"Note: Could not set leverage after sync (might be already set or other error): {lev_e_retry}")
+                else:
+                    self.logger.warning(f"Note: Could not set leverage (might be already set): {lev_e}")
             
             # 3. Check Balance
             balance = self.get_balance()
