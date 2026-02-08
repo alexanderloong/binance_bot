@@ -23,7 +23,7 @@ WORKERS = 5
 SLEEP = 1.5
 GEN_CHART = True
 
-def simulate(df, use_ema_filter=True, st_length=SUPERTREND_LENGTH, st_factor=SUPERTREND_FACTOR, sl_multiplier=ATR_MULTIPLIER, adx_threshold=ADX_THRESHOLD, use_rsi_filter=True, rsi_overbought=RSI_OVERBOUGHT, rsi_oversold=RSI_OVERSOLD, rsi_long_threshold=RSI_LONG_THRESHOLD, use_volume_filter=True, volume_ma_length=VOLUME_MA_LENGTH, leverage=LEVERAGE, position_size_percent=POSITION_SIZE_PERCENT,
+def simulate(df, use_ema_filter=True, st_length=SUPERTREND_LENGTH, st_factor=SUPERTREND_FACTOR, sl_multiplier=ATR_MULTIPLIER, use_adx_filter=True, adx_threshold=ADX_THRESHOLD, use_rsi_filter=True, rsi_overbought=RSI_OVERBOUGHT, rsi_oversold=RSI_OVERSOLD, rsi_long_threshold=RSI_LONG_THRESHOLD, use_volume_filter=True, volume_ma_length=VOLUME_MA_LENGTH, leverage=LEVERAGE, position_size_percent=POSITION_SIZE_PERCENT,
              use_ema_slope_sizing=True, ema_slope_threshold=EMA_SLOPE_THRESHOLD, reduced_size_percent=REDUCED_POSITION_SIZE_PERCENT, slope_ema_length=EMA_SLOPE_EMA_LENGTH, slope_lookback=EMA_SLOPE_LOOKBACK,
              use_divergence_filter=True, div_lookback=RSI_DIV_LOOKBACK, div_min_rsi=RSI_DIV_MIN_RSI, div_partial_pct=RSI_DIV_PARTIAL_CLOSE_PCT):
     initial_balance = 1000
@@ -186,7 +186,7 @@ def simulate(df, use_ema_filter=True, st_length=SUPERTREND_LENGTH, st_factor=SUP
         
         # New: ADX Filter
         adx_val = current_candle['ADX']
-        is_trending = adx_val > adx_threshold
+        is_trending = (adx_val > adx_threshold) if use_adx_filter else True
         
         # New: RSI Filter
         rsi_val = current_candle['RSI']
@@ -506,7 +506,7 @@ def run_backtest():
     df_final = df_st
     
     # Run simulation
-    res, trades = simulate(df_final, use_ema_filter=True, use_rsi_filter=True, use_volume_filter=True, use_ema_slope_sizing=True, use_divergence_filter=True)
+    res, trades = simulate(df_final, use_ema_filter=True, use_adx_filter=True, use_rsi_filter=True, use_volume_filter=True, use_ema_slope_sizing=True, use_divergence_filter=True)
     
     # --- LOGGING SETUP ---
     log_dir = "resource/backtest_logs"
