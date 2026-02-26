@@ -2,12 +2,17 @@
 import time
 from bot.exchange_client import ExchangeClient
 from bot.strategy import Strategy
-from bot.utils import setup_logger, parse_timeframe_to_seconds
+from bot.utils import setup_logger, parse_timeframe_to_seconds, get_public_ip
 from config import SYMBOL, TIMEFRAME
 
 def main():
     logger = setup_logger()
     logger.info("Binance Bot Starting...")
+    
+    # Identify the public IP address (crucial for Railway whitelist)
+    public_ip = get_public_ip()
+    logger.info(f"Public IP: {public_ip}")
+    
     logger.info(f"Target: {SYMBOL} on {TIMEFRAME} timeframe")
     
     client = ExchangeClient()

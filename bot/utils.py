@@ -2,6 +2,7 @@ import logging
 import os
 import time
 from datetime import datetime
+import urllib.request
 from typing import Any, Tuple
 import pytz
 
@@ -58,3 +59,26 @@ def parse_timeframe_to_seconds(tf_str: str) -> int:
         else: return val * 60  # Default to minutes if weird unit
     except Exception:
         return 60 # Default to 1m if parse fails
+
+def get_public_ip() -> str:
+    """
+    Fetches the public IP address of the current machine using external services.
+    
+    Returns:
+        str: The public IP address or an error message.
+    """
+    services = [
+        'https://api.ipify.org',
+        'https://ifconfig.me/ip',
+        'https://ident.me',
+        'https://api.myip.com' # Returns JSON, handle differently if used
+    ]
+    
+    for service in services:
+        try:
+            with urllib.request.urlopen(service, timeout=5) as response:
+                return response.read().decode('utf-8').strip()
+        except Exception:
+            continue
+            
+    return "Unknown (Failed to fetch public IP)"
