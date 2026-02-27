@@ -2,8 +2,9 @@
 import time
 from bot.exchange_client import ExchangeClient
 from bot.strategy import Strategy
+from bot.notifier import Notifier
 from bot.utils import setup_logger, parse_timeframe_to_seconds, get_public_ip
-from config import SYMBOL, TIMEFRAME
+from config import SYMBOL, TIMEFRAME, LARK_WEBHOOK_URL
 
 def main():
     logger = setup_logger()
@@ -13,11 +14,15 @@ def main():
     public_ip = get_public_ip()
     logger.info(f"Public IP: {public_ip}")
     
+    # Initialize Lark Notifier
+    notifier = Notifier(LARK_WEBHOOK_URL, logger)
+    notifier.send_lark_message(f"🚀 **Binance Bot Started**\nSymbol: {SYMBOL}\nTimeframe: {TIMEFRAME}\nIP: {public_ip}")
+    
     logger.info(f"Target: {SYMBOL} on {TIMEFRAME} timeframe")
     
     client = ExchangeClient()
     
-    strategy = Strategy(client, logger)
+    strategy = Strategy(client, logger, notifier)
     
     tf_seconds = parse_timeframe_to_seconds(TIMEFRAME)
 
@@ -64,12 +69,15 @@ def main():
             
         except KeyboardInterrupt:
             logger.info("Bot stopped by user.")
+            notifier.send_lark_message("🛑 **Binance Bot Stopped (User / KeyboardInterrupt)**")
             break
         except Exception as e:
             logger.error(f"Unexpected error: {e}")
+            notifier.send_lark_message(f"⚠️ **Binance Bot Error**\nException: {e}")
             time.sleep(5)
         except BaseException as be:
             logger.critical(f"CRITICAL: Bot process is crashing: {type(be).__name__}: {be}")
+            notifier.send_lark_message(f"💥 **CRITICAL CRASH**\nException: {type(be).__name__}: {be}")
             raise
 
 if __name__ == "__main__":

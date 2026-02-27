@@ -9,8 +9,10 @@ from dataclasses import dataclass
 # Strategy: Pure Trend Following (SuperTrend + EMA + ADX + RSI + Vol)
 # ==========================================
 
-# Load .env from project root
+# Load .env from project root or resource directory
 env_path = os.path.join(os.path.dirname(__file__), '.env')
+if not os.path.exists(env_path):
+    env_path = os.path.join(os.path.dirname(__file__), 'resource', '.env')
 load_dotenv(env_path)
 
 @dataclass(frozen=True)
@@ -19,6 +21,7 @@ class TradingConfig:
     API_KEY: str = os.getenv("API_KEY", "")
     SECRET: str = os.getenv("SECRET", "")
     USE_TESTNET: bool = os.getenv("USE_TESTNET", "True").lower() == "true"
+    LARK_WEBHOOK_URL: str = os.getenv("LARK_WEBHOOK_URL", "")
 
     # Strategy Settings
     SYMBOL: str = "BTC/USDT"
@@ -69,6 +72,7 @@ settings = TradingConfig()
 API_KEY = settings.API_KEY
 SECRET = settings.SECRET
 USE_TESTNET = settings.USE_TESTNET
+LARK_WEBHOOK_URL = settings.LARK_WEBHOOK_URL
 SYMBOL = settings.SYMBOL
 TIMEFRAME = settings.TIMEFRAME
 SUPERTREND_LENGTH = settings.SUPERTREND_LENGTH

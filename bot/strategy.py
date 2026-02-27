@@ -4,13 +4,15 @@ from typing import Optional, List, Any
 import pandas as pd # Type hint requirement
 
 from config import settings
+from bot.notifier import Notifier
 from .data_processor import DataProcessor
 from .utils import parse_timeframe_to_seconds
 
 class Strategy:
-    def __init__(self, exchange_client: Any, logger: Any):
+    def __init__(self, exchange_client: Any, logger: Any, notifier: Optional[Notifier] = None):
         self.client = exchange_client
         self.logger = logger
+        self.notifier = notifier
         self.in_position: bool = False 
         self.last_candle_time: Optional[int] = None
         self.trade_history: List[float] = [] # For rate limiting
@@ -91,6 +93,8 @@ class Strategy:
         
         if is_sl_hit:
             self.logger.warning(f"SOFTWARE STOP LOSS HIT at {current_price:.2f} (Target: {self.stop_loss_price:.2f}). Closing position.")
+            if self.notifier:
+                self.notifier.send_lark_message(f"⚠️ **SOFTWARE STOP LOSS HIT**\nCurrent Price: {current_price:.2f}\nTarget SL: {self.stop_loss_price:.2f}\nClosing position.")
             self.close_all_positions()
             self.stop_loss_price = None
 
@@ -265,6 +269,8 @@ class Strategy:
         if self.client.close_all_positions():
             self.in_position = False
             self.stop_loss_price = None
+            if self.notifier:
+                self.notifier.send_lark_message("🛑 **All Positions Closed / Orders Canceled**")
 
     def partial_close_position(self, quantity: float, side: str) -> None:
         self.logger.info(f"Partially closing {quantity:.4f} ({side})...")
@@ -272,6 +278,8 @@ class Strategy:
              order = self.client.create_order(side, quantity)
              if order:
                  self.logger.info("Partial close successful.")
+                 if self.notifier:
+                     self.notifier.send_lark_message(f"✂️ **Partial Close Successful**\nSide: {side}\nQuantity: {quantity:.4f}")
         except Exception as e:
              self.logger.error(f"Failed to partial close: {e}")
 
@@ -308,6 +316,14 @@ class Strategy:
             if order_resp:
                 self.in_position = True
                 self.trade_history.append(time.time())
+                if self.notifier:
+                    self.notifier.send_lark_message(
+                        f"✅ **Position Opened ({side})**\n"
+                        f"Entry Price: {price:.2f}\n"
+                        f"Amount: {trade_amount:.4f} BTC\n"
+                        f"Stop Loss: {self.stop_loss_price:.2f}\n"
+                        f"Leverage: {settings.LEVERAGE}x"
+                    )
             
         except Exception as e:
             self.logger.error(f"Failed to open position: {e}")
