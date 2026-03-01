@@ -49,7 +49,7 @@ python optimize/optimize_ema_slope.py
 - Results are saved to CSV files: `optimization_results_[parameter].csv`.
 - Performance metrics tracked: PnL%, Win Rate, Profit Factor, and Max Drawdown.
 
-## 📈 Current Production Settings (v1.15.0)
+## 📈 Current Production Settings (v1.16.0)
 
 | Parameter | Value | Description |
 |-----------|-------|-------------|

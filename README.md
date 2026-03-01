@@ -1,4 +1,4 @@
-# Binance Futures Trading Bot (v1.15.0 - 2026 Production Stable)
+# Binance Futures Trading Bot (v1.16.0 - 2026 Production Stable)
 
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
 ![Python](https://img.shields.io/badge/python-3.10%2B-blue)

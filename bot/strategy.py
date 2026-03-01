@@ -189,7 +189,7 @@ class Strategy:
         candle_time = last_candle['timestamp'].strftime('%d-%m-%Y %H:%M:%S')
         
         ema_slope_val = last_candle[f'EMA_{settings.EMA_SLOPE_EMA_LENGTH}']
-        ema_slope_prev = df_final.iloc[-(settings.EMA_SLOPE_LOOKBACK + 1)][f'EMA_{settings.EMA_SLOPE_EMA_LENGTH}']
+        ema_slope_prev = df_final.iloc[-(settings.EMA_SLOPE_LOOKBACK + 2)][f'EMA_{settings.EMA_SLOPE_EMA_LENGTH}']
         ema_slope_pct = (ema_slope_val - ema_slope_prev) / ema_slope_prev if ema_slope_prev != 0 else 0
         is_flat_slope = abs(ema_slope_pct) < settings.EMA_SLOPE_THRESHOLD
 

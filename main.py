@@ -1,4 +1,4 @@
-# Binance Trading Bot - v1.15.0 (Production Stable Release 2026)
+# Binance Trading Bot - v1.16.0 (Production Stable Release 2026)
 import time
 from bot.exchange_client import ExchangeClient
 from bot.strategy import Strategy
