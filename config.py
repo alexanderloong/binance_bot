@@ -27,7 +27,8 @@ class TradingConfig:
     SYMBOL: str = "BTC/USDT"
     TIMEFRAME: str = "15m"
     
-    # Trend Indicators
+    # Strategy Parameters
+    ROI_TP = 77.5                # Take Profit target in % ROI (from optimization)
     SUPERTREND_LENGTH: int = 18
     SUPERTREND_FACTOR: float = 1.45
     EMA_LENGTH: int = 102

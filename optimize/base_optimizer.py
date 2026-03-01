@@ -12,7 +12,7 @@ from backtest import get_backtest_data
 from bot.data_processor import DataProcessor
 from config import (
     EMA_LENGTH, SUPERTREND_LENGTH, SUPERTREND_FACTOR, ADX_LENGTH, 
-    ATR_LENGTH, RSI_LENGTH, VOLUME_MA_LENGTH
+    ATR_LENGTH, RSI_LENGTH, VOLUME_MA_LENGTH, EMA_SLOPE_EMA_LENGTH
 )
 
 class BaseOptimizer:
@@ -39,6 +39,7 @@ class BaseOptimizer:
         df_st['ATR'] = DataProcessor.calculate_atr(df, length=ATR_LENGTH)
         df_st['RSI'] = DataProcessor.calculate_rsi(df, length=RSI_LENGTH)
         df_st = DataProcessor.calculate_volume_ma(df_st, length=VOLUME_MA_LENGTH)
+        df_st[f'EMA_{EMA_SLOPE_EMA_LENGTH}'] = DataProcessor.calculate_ema(df_st, length=EMA_SLOPE_EMA_LENGTH)[f'EMA_{EMA_SLOPE_EMA_LENGTH}']
         
         self.df_final = df_st
         return True
@@ -79,8 +80,11 @@ class BaseOptimizer:
             return
 
         opt_df = pd.DataFrame(results)
-        opt_df.to_csv("optimize/" + filename, index=False)
-        print(f"\n✅ Results saved to optimize/{filename}")
+        # Save in the same directory as the optimizer script
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        save_path = os.path.join(current_dir, filename)
+        opt_df.to_csv(save_path, index=False)
+        print(f"\n✅ Results saved to {save_path}")
         
         # Sort by PnL
         if 'pnl_pct' in opt_df.columns:

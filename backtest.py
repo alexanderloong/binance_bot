@@ -15,7 +15,7 @@ from config import (
     RSI_LENGTH, RSI_OVERBOUGHT, RSI_OVERSOLD, RSI_LONG_THRESHOLD,
     VOLUME_MA_LENGTH,
     EMA_SLOPE_EMA_LENGTH, EMA_SLOPE_LOOKBACK, EMA_SLOPE_THRESHOLD, REDUCED_POSITION_SIZE_PERCENT,
-    RSI_DIV_LOOKBACK, RSI_DIV_MIN_RSI, RSI_DIV_PARTIAL_CLOSE_PCT
+    RSI_DIV_LOOKBACK, RSI_DIV_MIN_RSI, RSI_DIV_PARTIAL_CLOSE_PCT, settings
 )
 
 LIMIT = 150000
@@ -25,7 +25,8 @@ GEN_CHART = True
 
 def simulate(df, use_ema_filter=True, st_length=SUPERTREND_LENGTH, st_factor=SUPERTREND_FACTOR, sl_multiplier=ATR_MULTIPLIER, use_adx_filter=True, adx_threshold=ADX_THRESHOLD, use_rsi_filter=True, rsi_overbought=RSI_OVERBOUGHT, rsi_oversold=RSI_OVERSOLD, rsi_long_threshold=RSI_LONG_THRESHOLD, use_volume_filter=True, volume_ma_length=VOLUME_MA_LENGTH, leverage=LEVERAGE, position_size_percent=POSITION_SIZE_PERCENT,
              use_ema_slope_sizing=True, ema_slope_threshold=EMA_SLOPE_THRESHOLD, reduced_size_percent=REDUCED_POSITION_SIZE_PERCENT, slope_ema_length=EMA_SLOPE_EMA_LENGTH, slope_lookback=EMA_SLOPE_LOOKBACK,
-             use_divergence_filter=True, div_lookback=RSI_DIV_LOOKBACK, div_min_rsi=RSI_DIV_MIN_RSI, div_partial_pct=RSI_DIV_PARTIAL_CLOSE_PCT):
+             use_divergence_filter=True, div_lookback=RSI_DIV_LOOKBACK, div_min_rsi=RSI_DIV_MIN_RSI, div_partial_pct=RSI_DIV_PARTIAL_CLOSE_PCT,
+             roi_tp=0.0):
     initial_balance = 1000
     balance = initial_balance
     position_amt = 0 
@@ -145,7 +146,22 @@ def simulate(df, use_ema_filter=True, st_length=SUPERTREND_LENGTH, st_factor=SUP
             trades.append({'time': execution_time, 'type': 'CLOSE_SHORT', 'price': price, 'pnl': pnl})
             position_amt = 0
 
-        # 1a. PARTIAL TAKE PROFIT - DISABLED (Pure Trend Following)
+        # 1a. ROI TAKE PROFIT CHECK
+        if roi_tp > 0 and position_amt != 0:
+            current_roi = 0
+            if position_amt > 0:
+                current_roi = (price - entry_price) / entry_price * leverage
+            else:
+                current_roi = (entry_price - price) / entry_price * leverage
+            
+            if current_roi >= (roi_tp / 100.0): # roi_tp in percent
+                raw_pnl = (price - entry_price) * position_amt if position_amt > 0 else (entry_price - price) * abs(position_amt)
+                fee = (price * abs(position_amt)) * commission_rate
+                pnl = raw_pnl - fee
+                balance += pnl
+                trades.append({'time': execution_time, 'type': 'TAKE_PROFIT_ROI', 'price': price, 'pnl': pnl})
+                position_amt = 0
+                continue # Skip other exit checks
 
         # 1b. ATR-BASED STOP LOSS CHECK
         if position_amt > 0 and price <= stop_loss_price:
@@ -277,7 +293,7 @@ def simulate(df, use_ema_filter=True, st_length=SUPERTREND_LENGTH, st_factor=SUP
             # Add partial pnl but keep trade open
             if is_open:
                 current_trade_pnl += t['pnl']
-        elif any(x in t['type'] for x in ['CLOSE', 'STOP_LOSS', 'FINAL_CLOSE', 'LIQUIDATION']):
+        elif any(x in t['type'] for x in ['CLOSE', 'STOP_LOSS', 'FINAL_CLOSE', 'LIQUIDATION', 'TAKE_PROFIT_ROI']):
             current_trade_pnl += t['pnl']
             if is_open:
                 trade_cycles.append(current_trade_pnl)
@@ -489,7 +505,7 @@ def run_backtest():
 
     limit = LIMIT
 
-    print(f"Strategy: EMA {EMA_LENGTH}, SuperTrend {SUPERTREND_LENGTH}/{SUPERTREND_FACTOR}, ADX > {ADX_THRESHOLD}, SL: {ATR_MULTIPLIER}xATR, TP: Disabled (Pure Trend Following)")
+    print(f"Strategy: EMA {EMA_LENGTH}, SuperTrend {SUPERTREND_LENGTH}/{SUPERTREND_FACTOR}, ADX > {ADX_THRESHOLD}, SL: {ATR_MULTIPLIER}xATR, ROI TP: {settings.ROI_TP}%")
     
     df = get_backtest_data(limit=limit)
     if df is None: return
@@ -506,7 +522,7 @@ def run_backtest():
     df_final = df_st
     
     # Run simulation
-    res, trades = simulate(df_final, use_ema_filter=True, use_adx_filter=True, use_rsi_filter=True, use_volume_filter=True, use_ema_slope_sizing=True, use_divergence_filter=True)
+    res, trades = simulate(df_final, use_ema_filter=True, use_adx_filter=True, use_rsi_filter=True, use_volume_filter=True, use_ema_slope_sizing=True, use_divergence_filter=True, roi_tp=settings.ROI_TP)
     
     # --- LOGGING SETUP ---
     log_dir = "resource/backtest_logs"

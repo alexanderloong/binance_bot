@@ -97,6 +97,29 @@ class Strategy:
                 self.notifier.send_lark_message(f"⚠️ **SOFTWARE STOP LOSS HIT**\nCurrent Price: {current_price:.2f}\nTarget SL: {self.stop_loss_price:.2f}\nClosing position.")
             self.close_all_positions()
             self.stop_loss_price = None
+            return
+
+        # Check for ROI Take Profit
+        if settings.ROI_TP > 0:
+            roi = 0
+            if current_pos_amt > 0:
+                roi = (current_price - entry_price) / entry_price * settings.LEVERAGE
+            else:
+                roi = (entry_price - current_price) / entry_price * settings.LEVERAGE
+            
+            if (roi * 100) >= settings.ROI_TP:
+                self.logger.info(f"ROI TAKE PROFIT TARGET REACHED: {roi*100:.2f}% (Target: {settings.ROI_TP}%). Closing position.")
+                if self.notifier:
+                    self.notifier.send_lark_message(
+                        f"💰 **ROI TAKE PROFIT TARGET REACHED**\n"
+                        f"Current Price: {current_price:.2f}\n"
+                        f"Entry Price: {entry_price:.2f}\n"
+                        f"Current ROI: {roi*100:.2f}%\n"
+                        f"Target: {settings.ROI_TP}%\n"
+                        f"Closing position."
+                    )
+                self.close_all_positions()
+                self.stop_loss_price = None
 
     def _check_new_candle(self, df: pd.DataFrame) -> Optional[float]:
         """
