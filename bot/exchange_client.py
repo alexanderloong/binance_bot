@@ -4,6 +4,7 @@ from typing import Optional, Tuple, Dict, Any, List
 
 import pandas as pd
 from binance.um_futures import UMFutures
+from binance.websocket.um_futures.websocket_client import UMFuturesWebsocketClient
 from config import settings
 
 # --- GLOBAL TIME SYNC ---
@@ -22,13 +23,20 @@ class ExchangeClient:
         
         # Determine base URL
         base_url = "https://fapi.binance.com"
+        ws_base_url = "wss://fstream.binance.com/ws"
         if settings.USE_TESTNET:
             base_url = "https://testnet.binancefuture.com"
+            ws_base_url = "wss://stream.binancefuture.com/ws"
             
         self.client = UMFutures(key=settings.API_KEY, secret=settings.SECRET, base_url=base_url)
         
         # Prepare symbol
         self.symbol: str = settings.SYMBOL.replace("/", "").upper()
+        
+        # --- WEBSOCKET STATE ---
+        self.klines_buffer: Optional[pd.DataFrame] = None
+        self.ws_client = UMFuturesWebsocketClient(on_message=self._on_ws_message, stream_url=ws_base_url)
+        self._start_kline_stream()
         
         # Symbol information (precision)
         self.qty_precision: int = 3 # Default for BTCUSDT safety
@@ -41,7 +49,10 @@ class ExchangeClient:
             self.client.ping()
             self.logger.info("Connection to Binance API established.")
             
-            # 2. Try to set leverage
+            # Pre-populate buffer
+            self.logger.info("Pre-populating klines buffer via REST...")
+            self.fetch_ohlcv(limit=300) 
+
             # 2. Try to set leverage
             try:
                 self.client.change_leverage(
@@ -72,6 +83,50 @@ class ExchangeClient:
             
         except Exception as e:
             self.logger.error(f"Critical connection error: {e}")
+
+    def _start_kline_stream(self) -> None:
+        """Starts the WebSocket kline stream."""
+        kline_stream = f"{self.symbol.lower()}@kline_{settings.TIMEFRAME}"
+        self.ws_client.subscribe(stream=kline_stream, id=1)
+        self.logger.info(f"Subscribed to WebSocket stream: {kline_stream}")
+
+    def _on_ws_message(self, _, message) -> None:
+        """Handles incoming WebSocket messages."""
+        try:
+            import json
+            data = json.loads(message)
+            
+            # Handle kline event
+            if 'e' in data and data['e'] == 'kline':
+                k = data['k']
+                is_candle_closed = k['x']
+                
+                # New candle data row
+                new_row = {
+                    'timestamp': pd.to_datetime(k['t'], unit='ms').tz_localize('UTC').tz_convert('Asia/Ho_Chi_Minh'),
+                    'open': float(k['o']),
+                    'high': float(k['h']),
+                    'low': float(k['l']),
+                    'close': float(k['c']),
+                    'volume': float(k['v'])
+                }
+
+                if self.klines_buffer is not None:
+                    # Update or append
+                    # If the timestamp matches the last row, update it (current unfinished candle)
+                    # If it's newer, append and trim
+                    last_ts = self.klines_buffer['timestamp'].iloc[-1]
+                    if new_row['timestamp'] == last_ts:
+                        for col in ['open', 'high', 'low', 'close', 'volume']:
+                            self.klines_buffer.iloc[-1, self.klines_buffer.columns.get_loc(col)] = new_row[col]
+                    elif new_row['timestamp'] > last_ts:
+                        # Append new candle
+                        self.klines_buffer = pd.concat([self.klines_buffer, pd.DataFrame([new_row])], ignore_index=True)
+                        # Keep only last 500 to be safe
+                        if len(self.klines_buffer) > 500:
+                            self.klines_buffer = self.klines_buffer.iloc[-500:].reset_index(drop=True)
+        except Exception as e:
+            self.logger.error(f"Error handling WS message: {e}")
 
     def sync_time(self) -> None:
         """Calculates the offset between local time and Binance server time."""
@@ -108,6 +163,22 @@ class ExchangeClient:
             self.logger.error(f"Error fetching symbol info: {e}")
 
     def fetch_ohlcv(self, limit: int = 100) -> Optional[pd.DataFrame]:
+        """
+        Returns kline data. Priority: WebSocket buffer. 
+        Fallback: REST API (only if buffer is empty or stale).
+        """
+        # If we have a buffer and it's somewhat fresh, return it
+        if self.klines_buffer is not None and not self.klines_buffer.empty:
+            # Check if the buffer is too old (e.g., > 1 min silence from WS)
+            last_ts = self.klines_buffer['timestamp'].iloc[-1].timestamp()
+            now_ts = synced_time()
+            
+            if (now_ts - last_ts) < 120: # 2 mins tolerance
+                return self.klines_buffer.tail(limit).copy()
+            else:
+                self.logger.warning("WebSocket buffer stale (>120s). Falling back to REST API...")
+
+        # --- REST FALLBACK / INITIAL POPULATION ---
         try:
             try:
                 bars = self.client.klines(self.symbol, interval=settings.TIMEFRAME, limit=limit)
@@ -133,9 +204,14 @@ class ExchangeClient:
                 
             # Convert timestamp
             df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms').dt.tz_localize('UTC').dt.tz_convert('Asia/Ho_Chi_Minh')
+            
+            # Seed buffer
+            if self.klines_buffer is None:
+                self.klines_buffer = df[['timestamp', 'open', 'high', 'low', 'close', 'volume']].copy()
+                
             return df[['timestamp', 'open', 'high', 'low', 'close', 'volume']]
         except Exception as e:
-            self.logger.error(f"Error fetching data for {settings.SYMBOL}: {e}")
+            self.logger.error(f"Error fetching data via REST for {settings.SYMBOL}: {e}")
             return None
 
     def fetch_history(self, limit: int = 1000) -> Optional[pd.DataFrame]:
