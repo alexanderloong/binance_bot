@@ -2,9 +2,13 @@ import logging
 import os
 import time
 from datetime import datetime
+import json
 import urllib.request
-from typing import Any, Tuple
+from typing import Any, Tuple, Optional
 import pytz
+from config import settings
+
+import sys
 
 def setup_logger() -> logging.Logger:
     """
@@ -34,10 +38,57 @@ def setup_logger() -> logging.Logger:
         format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
         handlers=[
             logging.FileHandler(log_file, encoding='utf-8'),
-            logging.StreamHandler()
+            logging.StreamHandler(sys.stdout),
+            LarkNotificationHandler()
         ]
     )
     return logging.getLogger("BinanceBot")
+
+def send_lark_notification(message: str) -> bool:
+    """
+    Sends a message to a Lark webhook.
+    """
+    webhook_url = settings.LARK_WEBHOOK_URL
+    if not webhook_url:
+        return False
+        
+    try:
+        data = json.dumps({
+            "msg_type": "text",
+            "content": {
+                "text": message
+            }
+        }).encode('utf-8')
+        
+        req = urllib.request.Request(
+            webhook_url, 
+            data=data, 
+            headers={'Content-Type': 'application/json'}
+        )
+        
+        with urllib.request.urlopen(req, timeout=10) as response:
+            return response.getcode() == 200
+    except Exception:
+        return False
+
+class LarkNotificationHandler(logging.Handler):
+    """
+    Custom logging handler that sends ERROR and CRITICAL logs to Lark.
+    """
+    def __init__(self, level=logging.ERROR):
+        super().__init__(level)
+
+    def emit(self, record):
+        try:
+            msg = self.format(record)
+            # Add some context/formatting for Lark
+            lark_msg = f"🔴 [BinanceBot ERROR]\n{msg}"
+            if record.levelno >= logging.CRITICAL:
+                lark_msg = f"🚨 [BinanceBot CRITICAL]\n{msg}"
+                
+            send_lark_notification(lark_msg)
+        except Exception:
+            self.handleError(record)
 
 def parse_timeframe_to_seconds(tf_str: str) -> int:
     """
