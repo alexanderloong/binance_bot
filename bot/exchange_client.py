@@ -35,6 +35,7 @@ class ExchangeClient:
         
         # --- WEBSOCKET STATE ---
         self.klines_buffer: Optional[pd.DataFrame] = None
+        self.last_ws_update: float = synced_time()
         self.ws_client = UMFuturesWebsocketClient(on_message=self._on_ws_message, stream_url=ws_base_url)
         self._start_kline_stream()
         
@@ -112,6 +113,7 @@ class ExchangeClient:
                 }
 
                 if self.klines_buffer is not None:
+                    self.last_ws_update = synced_time()
                     # Update or append
                     # If the timestamp matches the last row, update it (current unfinished candle)
                     # If it's newer, append and trim
@@ -169,14 +171,13 @@ class ExchangeClient:
         """
         # If we have a buffer and it's somewhat fresh, return it
         if self.klines_buffer is not None and not self.klines_buffer.empty:
-            # Check if the buffer is too old (e.g., > 1 min silence from WS)
-            last_ts = self.klines_buffer['timestamp'].iloc[-1].timestamp()
+            # Check if the buffer is too old (e.g., > 120s silence from WS)
             now_ts = synced_time()
             
-            if (now_ts - last_ts) < 120: # 2 mins tolerance
+            if (now_ts - self.last_ws_update) < 120: # 120s tolerance for WS silence
                 return self.klines_buffer.tail(limit).copy()
             else:
-                self.logger.warning("WebSocket buffer stale (>120s). Falling back to REST API...")
+                self.logger.warning(f"WebSocket buffer stale (last update {now_ts - self.last_ws_update:.1f}s ago). Falling back to REST API...")
 
         # --- REST FALLBACK / INITIAL POPULATION ---
         try:
