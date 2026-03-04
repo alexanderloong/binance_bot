@@ -1,6 +1,8 @@
 # Binance Trading Bot - v1.16.0 (Production Stable Release 2026)
 import time
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
+
+VN_TZ = timezone(timedelta(hours=7))
 from bot.exchange_client import ExchangeClient
 from bot.strategy import Strategy
 from bot.notifier import Notifier
@@ -45,7 +47,7 @@ def main():
             f"🏦 Balance: {balance:.2f} USDT\n"
             f"📊 Position: {pos_status}\n"
             f"🌐 IP: {public_ip}\n"
-            f"🕐 Time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+            f"🕐 Time: {datetime.now(VN_TZ).strftime('%Y-%m-%d %H:%M:%S')}"
         )
         notifier.send_lark_message(startup_msg)
     except Exception as e:
@@ -54,7 +56,7 @@ def main():
 
     # Daily Report Tracking
     # If bot starts after 9 AM, mark today as already reported to avoid re-sending
-    now_startup = datetime.now()
+    now_startup = datetime.now(VN_TZ)
     last_report_date = now_startup.date() if now_startup.hour >= 9 else None
 
     logger.info("Bot is running. Press Ctrl+C to stop.")
@@ -91,7 +93,7 @@ def main():
                     time.sleep(1)
             
             # 3. Daily Report Check (at 9:00 AM)
-            now_dt = datetime.now()
+            now_dt = datetime.now(VN_TZ)
             if now_dt.hour >= 9 and last_report_date != now_dt.date():
                 logger.info("Time for daily report (>= 9:00 AM). Sending...")
                 strategy.send_daily_report()
