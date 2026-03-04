@@ -1,5 +1,6 @@
 # Binance Trading Bot - v1.16.0 (Production Stable Release 2026)
 import time
+from datetime import datetime
 from bot.exchange_client import ExchangeClient
 from bot.strategy import Strategy
 from bot.notifier import Notifier
@@ -25,6 +26,9 @@ def main():
     strategy = Strategy(client, logger, notifier)
     
     tf_seconds = parse_timeframe_to_seconds(TIMEFRAME)
+
+    # Daily Report Tracking
+    last_report_date = None 
 
     logger.info("Bot is running. Press Ctrl+C to stop.")
     
@@ -60,7 +64,14 @@ def main():
                 while time.time() < wake_time:
                     time.sleep(1)
             
-            # 3. Execution Zone: detailed polling (every 1s)
+            # 3. Daily Report Check (at 9:00 AM)
+            now_dt = datetime.now()
+            if now_dt.hour >= 9 and last_report_date != now_dt.date():
+                logger.info("Time for daily report (>= 9:00 AM). Sending...")
+                strategy.send_daily_report()
+                last_report_date = now_dt.date()
+
+            # 4. Execution Zone: detailed polling (every 1s)
             # Strategy handles deduplication (only processes new candle once)
             strategy.run_analysis()
             

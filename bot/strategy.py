@@ -1,6 +1,7 @@
 import time
 from datetime import datetime, timedelta
-from typing import Optional, List, Any
+import logging
+from typing import Optional, Tuple, Dict, Any, List
 import pandas as pd # Type hint requirement
 
 from config import settings
@@ -93,8 +94,25 @@ class Strategy:
         
         if is_sl_hit:
             self.logger.warning(f"SOFTWARE STOP LOSS HIT at {current_price:.2f} (Target: {self.stop_loss_price:.2f}). Closing position.")
+            
+            pnl = 0.0
+            roi = 0.0
+            if current_pos_amt > 0:
+                pnl = (current_price - entry_price) * abs(current_pos_amt)
+                roi = (current_price - entry_price) / entry_price * settings.LEVERAGE * 100
+            else:
+                pnl = (entry_price - current_price) * abs(current_pos_amt)
+                roi = (entry_price - current_price) / entry_price * settings.LEVERAGE * 100
+
             if self.notifier:
-                self.notifier.send_lark_message(f"⚠️ **SOFTWARE STOP LOSS HIT**\nCurrent Price: {current_price:.2f}\nTarget SL: {self.stop_loss_price:.2f}\nClosing position.")
+                self.notifier.send_lark_message(
+                    f"⚠️ **SOFTWARE STOP LOSS HIT**\n"
+                    f"Current Price: {current_price:.2f}\n"
+                    f"Target SL: {self.stop_loss_price:.2f}\n"
+                    f"PNL: {pnl:.2f} USDT\n"
+                    f"ROI: {roi:.2f}%\n"
+                    f"Closing position."
+                )
             self.close_all_positions()
             self.stop_loss_price = None
             return
@@ -108,6 +126,7 @@ class Strategy:
                 roi = (entry_price - current_price) / entry_price * settings.LEVERAGE
             
             if (roi * 100) >= settings.ROI_TP:
+                pnl = roi * entry_price * abs(current_pos_amt) / settings.LEVERAGE # approximate
                 self.logger.info(f"ROI TAKE PROFIT TARGET REACHED: {roi*100:.2f}% (Target: {settings.ROI_TP}%). Closing position.")
                 if self.notifier:
                     self.notifier.send_lark_message(
@@ -115,6 +134,7 @@ class Strategy:
                         f"Current Price: {current_price:.2f}\n"
                         f"Entry Price: {entry_price:.2f}\n"
                         f"Current ROI: {roi*100:.2f}%\n"
+                        f"PNL: {pnl:.2f} USDT\n"
                         f"Target: {settings.ROI_TP}%\n"
                         f"Closing position."
                     )
@@ -288,12 +308,30 @@ class Strategy:
             self.logger.info(f"No entry signal for {candle_time} (Current Trend: {current_trend}, Position: {current_pos_amt})")
 
     def close_all_positions(self) -> None:
-        self.logger.info("Closing all positions and canceling orders...")
+        self.logger.info("Closing all positions... fetching PnL/ROI for notification.")
+        
+        # Try to get position details before closing for the notification
+        pnl_str = ""
+        try:
+            amt, entry = self.client.get_current_position()
+            if amt != 0:
+                 # Fetch current price for estimate
+                 df = self.client.fetch_ohlcv(limit=1)
+                 if df is not None and not df.empty:
+                    curr_price = df['close'].iloc[-1]
+                    if amt > 0:
+                        roi = (curr_price - entry) / entry * settings.LEVERAGE * 100
+                        pnl = (curr_price - entry) * abs(amt)
+                    else:
+                        roi = (entry - curr_price) / entry * settings.LEVERAGE * 100
+                        pnl = (entry - curr_price) * abs(amt)
+                    pnl_str = f"\nPNL: {pnl:.2f} USDT\nROI: {roi:.2f}%"
+        except:
+            pass
+
         if self.client.close_all_positions():
             self.in_position = False
             self.stop_loss_price = None
-            if self.notifier:
-                self.notifier.send_lark_message("🛑 **All Positions Closed / Orders Canceled**")
 
     def partial_close_position(self, quantity: float, side: str) -> None:
         self.logger.info(f"Partially closing {quantity:.4f} ({side})...")
@@ -343,10 +381,33 @@ class Strategy:
                     self.notifier.send_lark_message(
                         f"✅ **Position Opened ({side})**\n"
                         f"Entry Price: {price:.2f}\n"
-                        f"Amount: {trade_amount:.4f} BTC\n"
+                        f"Amount: {trade_amount:.4f} BTC ({amount_usdt:.2f} USDT)\n"
                         f"Stop Loss: {self.stop_loss_price:.2f}\n"
                         f"Leverage: {settings.LEVERAGE}x"
                     )
             
         except Exception as e:
             self.logger.error(f"Failed to open position: {e}")
+
+    def send_daily_report(self) -> None:
+        """Sends a summary report of yesterday's performance."""
+        try:
+            total_pnl, trade_count = self.client.get_yesterday_stats()
+            balance = self.client.get_balance()
+            
+            yesterday = (datetime.now() - timedelta(days=1)).strftime('%d-%m-%Y')
+            
+            message = (
+                f"📊 **DAILY PERFORMANCE REPORT ({yesterday})**\n"
+                f"--------------------------------\n"
+                f"💰 Total PNL: {total_pnl:.2f} USDT\n"
+                f"📈 Trade Entries: {trade_count}\n"
+                f"🏦 Current Balance: {balance:.2f} USDT\n"
+            )
+            
+            self.logger.info(f"Sending daily report: PnL {total_pnl}, Trades {trade_count}")
+            if self.notifier:
+                self.notifier.send_lark_message(message)
+                
+        except Exception as e:
+            self.logger.error(f"Error generating daily report: {e}")

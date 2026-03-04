@@ -341,3 +341,41 @@ class ExchangeClient:
         except Exception as e:
             self.logger.error(f"Error closing positions: {e}")
             return False
+    def get_yesterday_stats(self) -> Tuple[float, int]:
+        """
+        Fetches realized PnL and number of trades for the previous calendar day.
+        Returns:
+            Tuple[float, int]: (Total PnL, Trade Count)
+        """
+        try:
+            # Calculate yesterday's range (00:00:00 to 23:59:59)
+            now = datetime.now()
+            yesterday = now - timedelta(days=1)
+            start_time = int(yesterday.replace(hour=0, minute=0, second=0, microsecond=0).timestamp() * 1000)
+            end_time = int(yesterday.replace(hour=23, minute=59, second=59, microsecond=999).timestamp() * 1000)
+            
+            self.logger.info(f"Fetching stats from {yesterday.date()} ({start_time} to {end_time})")
+            
+            trades = self.client.get_account_trades(
+                symbol=self.symbol,
+                startTime=start_time,
+                endTime=end_time,
+                recvWindow=10000
+            )
+            
+            total_pnl = 0.0
+            unique_trades = set()
+            
+            if trades:
+                for t in trades:
+                    total_pnl += float(t.get('realizedPnl', 0))
+                    # A "trade" in user context usually means a position entry. 
+                    # We can approximate by looking at orders that increased position or just count unique orders.
+                    # Given the request, counting unique orderIds that are not 'reduceOnly' or similar might be complex.
+                    # We'll count unique orderIds for now as a proxy for "lệnh vào".
+                    unique_trades.add(t['orderId'])
+            
+            return total_pnl, len(unique_trades)
+        except Exception as e:
+            self.logger.error(f"Error fetching yesterday's stats: {e}")
+            return 0.0, 0

@@ -1,6 +1,13 @@
+## [1.15.2] - 2026-03-04
+### Changed
+- **Cleanup**: Removed redundant "All Positions Closed" Lark notification.
+- **Documentation Update**: Updated version to 1.15.2.
+
 ## [1.15.1] - 2026-03-04
 ### Changed
 - **Documentation Update**: Updated documentation and tagged release as v1.15.1.
+- **Lark Notifications**: Enhanced notifications with PnL, ROI, and USDT amounts.
+- **Reporting**: Implemented daily performance report at 9:00 AM.
 
 ## [1.15.0] - 2026-02-06
 ### Added
