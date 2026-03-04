@@ -1,6 +1,6 @@
-# Changelog
-
-All notable changes to this project will be documented in this file.
+## [1.15.1] - 2026-03-04
+### Changed
+- **Documentation Update**: Updated documentation and tagged release as v1.15.1.
 
 ## [1.15.0] - 2026-02-06
 ### Added
