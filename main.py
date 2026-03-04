@@ -5,7 +5,7 @@ from bot.exchange_client import ExchangeClient
 from bot.strategy import Strategy
 from bot.notifier import Notifier
 from bot.utils import setup_logger, parse_timeframe_to_seconds, get_public_ip
-from config import SYMBOL, TIMEFRAME, LARK_WEBHOOK_URL
+from config import settings, SYMBOL, TIMEFRAME, LARK_WEBHOOK_URL
 
 def main():
     logger = setup_logger()
@@ -17,7 +17,6 @@ def main():
     
     # Initialize Lark Notifier
     notifier = Notifier(LARK_WEBHOOK_URL, logger)
-    notifier.send_lark_message(f"🚀 **Binance Bot Started**\nSymbol: {SYMBOL}\nTimeframe: {TIMEFRAME}\nIP: {public_ip}")
     
     logger.info(f"Target: {SYMBOL} on {TIMEFRAME} timeframe")
     
@@ -27,8 +26,36 @@ def main():
     
     tf_seconds = parse_timeframe_to_seconds(TIMEFRAME)
 
+    # --- Send Startup Overview Message ---
+    try:
+        balance = client.get_balance()
+        pos_amt, entry_price = client.get_current_position()
+        
+        pos_status = "No open position"
+        if pos_amt != 0:
+            side = "LONG 📈" if pos_amt > 0 else "SHORT 📉"
+            pos_status = f"{side} | Size: {abs(pos_amt)} | Entry: {entry_price}"
+        
+        startup_msg = (
+            f"🚀 **Binance Bot Started**\n"
+            f"--------------------------------\n"
+            f"📌 Symbol: {SYMBOL}\n"
+            f"⏱ Timeframe: {TIMEFRAME}\n"
+            f"⚡ Leverage: {settings.LEVERAGE}x\n"
+            f"🏦 Balance: {balance:.2f} USDT\n"
+            f"📊 Position: {pos_status}\n"
+            f"🌐 IP: {public_ip}\n"
+            f"🕐 Time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+        )
+        notifier.send_lark_message(startup_msg)
+    except Exception as e:
+        logger.warning(f"Could not send full startup message: {e}")
+        notifier.send_lark_message(f"🚀 **Binance Bot Started**\nSymbol: {SYMBOL}\nTimeframe: {TIMEFRAME}\nIP: {public_ip}")
+
     # Daily Report Tracking
-    last_report_date = None 
+    # If bot starts after 9 AM, mark today as already reported to avoid re-sending
+    now_startup = datetime.now()
+    last_report_date = now_startup.date() if now_startup.hour >= 9 else None
 
     logger.info("Bot is running. Press Ctrl+C to stop.")
     
