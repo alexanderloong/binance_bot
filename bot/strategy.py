@@ -1,7 +1,7 @@
 import time
 from datetime import datetime, timedelta
 import logging
-from typing import Optional, Tuple, Dict, Any, List
+from typing import Optional, Any
 import pandas as pd # Type hint requirement
 
 from config import settings
@@ -95,16 +95,16 @@ class Strategy:
         if is_sl_hit:
             self.logger.warning(f"SOFTWARE STOP LOSS HIT at {current_price:.2f} (Target: {self.stop_loss_price:.2f}). Closing position.")
             
-            pnl = 0.0
-            roi = 0.0
-            if current_pos_amt > 0:
-                pnl = (current_price - entry_price) * abs(current_pos_amt)
-                roi = (current_price - entry_price) / entry_price * settings.LEVERAGE * 100
-            else:
-                pnl = (entry_price - current_price) * abs(current_pos_amt)
-                roi = (entry_price - current_price) / entry_price * settings.LEVERAGE * 100
-
             if self.notifier:
+                pnl = 0.0
+                roi = 0.0
+                if current_pos_amt > 0:
+                    pnl = (current_price - entry_price) * abs(current_pos_amt)
+                    roi = (current_price - entry_price) / entry_price * settings.LEVERAGE * 100
+                else:
+                    pnl = (entry_price - current_price) * abs(current_pos_amt)
+                    roi = (entry_price - current_price) / entry_price * settings.LEVERAGE * 100
+
                 self.notifier.send_lark_message(
                     f"⚠️ **SOFTWARE STOP LOSS HIT**\n"
                     f"Current Price: {current_price:.2f}\n"
@@ -126,9 +126,9 @@ class Strategy:
                 roi = (entry_price - current_price) / entry_price * settings.LEVERAGE
             
             if (roi * 100) >= settings.ROI_TP:
-                pnl = roi * entry_price * abs(current_pos_amt) / settings.LEVERAGE # approximate
                 self.logger.info(f"ROI TAKE PROFIT TARGET REACHED: {roi*100:.2f}% (Target: {settings.ROI_TP}%). Closing position.")
                 if self.notifier:
+                    pnl = roi * entry_price * abs(current_pos_amt) / settings.LEVERAGE # approximate
                     self.notifier.send_lark_message(
                         f"💰 **ROI TAKE PROFIT TARGET REACHED**\n"
                         f"Current Price: {current_price:.2f}\n"
@@ -223,8 +223,6 @@ class Strategy:
         # --- STALENESS CHECK (Only skip TRADE logic, not analysis logging) ---
         STALE_TOLERANCE = 120 
         if delay_seconds > STALE_TOLERANCE:
-            if self.last_candle_time is None: # Should technically be set by _check_new_candle
-                 pass 
             self.logger.warning(f"Candle {candle_time} is STALE (Closed {int(delay_seconds)}s ago). Skipping trade logic.")
             return
 
@@ -246,12 +244,9 @@ class Strategy:
         if current_pos_amt > 0 and current_trend == -1: # Existing Long & Trend turns Red
              self.logger.info(f"Trend flipped to RED. Closing LONG position ({current_pos_amt}).")
              self.close_all_positions()
-             current_pos_amt = 0 
         elif current_pos_amt < 0 and current_trend == 1: # Existing Short & Trend turns Green
              self.logger.info(f"Trend flipped to GREEN. Closing SHORT position ({current_pos_amt}).")
              self.close_all_positions()
-             self.close_all_positions()
-             current_pos_amt = 0
         
         # 1b. RSI DIVERGENCE - PARTIAL CLOSE & BE
         elif current_pos_amt > 0 and bearish_div:

@@ -2,6 +2,7 @@ import time
 import logging
 from typing import Optional, Tuple, Dict, Any, List
 
+import json
 import pandas as pd
 from binance.um_futures import UMFutures
 from binance.websocket.um_futures.websocket_client import UMFuturesWebsocketClient
@@ -16,6 +17,22 @@ def synced_time() -> float:
 
 # Global monkey-patch
 time.time = synced_time
+
+from functools import wraps
+
+def retry_on_timestamp_error(func):
+    """Decorator to retry on -1021 timestamp error after time sync."""
+    @wraps(func)
+    def wrapper(self, *args, **kwargs):
+        try:
+            return func(self, *args, **kwargs)
+        except Exception as e:
+            if "-1021" in str(e):
+                self.logger.warning(f"Timestamp error (-1021) in {func.__name__}. Syncing time and retrying...")
+                self.sync_time()
+                return func(self, *args, **kwargs)
+            raise
+    return wrapper
 
 class ExchangeClient:
     def __init__(self) -> None:
@@ -56,27 +73,10 @@ class ExchangeClient:
 
             # 2. Try to set leverage
             try:
-                self.client.change_leverage(
-                    symbol=self.symbol, 
-                    leverage=settings.LEVERAGE, 
-                    recvWindow=10000
-                )
+                self._change_leverage_with_retry(self.symbol, settings.LEVERAGE)
                 self.logger.info(f"Leverage set to {settings.LEVERAGE}x for {self.symbol}")
             except Exception as lev_e:
-                if "-1021" in str(lev_e):
-                    self.logger.warning("Timestamp error (-1021) on leverage set. Syncing time and retrying...")
-                    self.sync_time()
-                    try:
-                        self.client.change_leverage(
-                            symbol=self.symbol, 
-                            leverage=settings.LEVERAGE, 
-                            recvWindow=10000
-                        )
-                        self.logger.info(f"Leverage set to {settings.LEVERAGE}x for {self.symbol}")
-                    except Exception as lev_e_retry:
-                         self.logger.warning(f"Note: Could not set leverage after sync (might be already set or other error): {lev_e_retry}")
-                else:
-                    self.logger.warning(f"Note: Could not set leverage (might be already set): {lev_e}")
+                self.logger.warning(f"Note: Could not set leverage (might be already set or other error): {lev_e}")
             
             # 3. Check Balance
             balance = self.get_balance()
@@ -94,7 +94,6 @@ class ExchangeClient:
     def _on_ws_message(self, _, message) -> None:
         """Handles incoming WebSocket messages."""
         try:
-            import json
             data = json.loads(message)
             
             # Handle kline event
@@ -181,14 +180,7 @@ class ExchangeClient:
 
         # --- REST FALLBACK / INITIAL POPULATION ---
         try:
-            try:
-                bars = self.client.klines(self.symbol, interval=settings.TIMEFRAME, limit=limit)
-            except Exception as e:
-                # -1021 is "Timestamp for this request is outside of the recvWindow"
-                if "-1021" in str(e):
-                    self.sync_time()
-                    bars = self.client.klines(self.symbol, interval=settings.TIMEFRAME, limit=limit)
-                else: raise e
+            bars = self._klines_with_retry(self.symbol, settings.TIMEFRAME, limit)
             
             if not bars:
                 return None
@@ -222,27 +214,13 @@ class ExchangeClient:
         try:
             side = side.upper()
             
-            try:
-                order = self.client.new_order(
-                    symbol=self.symbol,
-                    side=side,
-                    type='MARKET',
-                    quantity=round(amount, self.qty_precision),
-                    recvWindow=10000
-                )
-            except Exception as e:
-                if "-1021" in str(e):
-                    self.logger.warning("Timestamp error (-1021) on order. Retrying with re-sync...")
-                    self.sync_time()
-                    order = self.client.new_order(
-                        symbol=self.symbol,
-                        side=side,
-                        type='MARKET',
-                        quantity=round(amount, self.qty_precision),
-                        recvWindow=10000
-                    )
-                else:
-                    raise e
+            order = self._new_order_with_retry(
+                symbol=self.symbol,
+                side=side,
+                type='MARKET',
+                quantity=round(amount, self.qty_precision),
+                recvWindow=10000
+            )
 
             if order:
                 self.logger.info(f"Market Order Successful: {side} {amount} {self.symbol} - ID: {order.get('orderId')}")
@@ -263,15 +241,7 @@ class ExchangeClient:
 
     def get_balance(self) -> Optional[float]:
         try:
-            try:
-                account_info = self.client.account(recvWindow=10000)
-            except Exception as e:
-                if "-1021" in str(e):
-                    self.logger.warning("Timestamp error (-1021) on balance. Retrying with re-sync...")
-                    self.sync_time()
-                    account_info = self.client.account(recvWindow=10000)
-                else:
-                    raise e
+            account_info = self._account_with_retry(recvWindow=10000)
 
             for asset in account_info['assets']:
                 if asset['asset'] == 'USDT':
@@ -288,15 +258,7 @@ class ExchangeClient:
         """
         try:
             # Using get_position_risk is faster and more specific than account()
-            try:
-                positions = self.client.get_position_risk(symbol=self.symbol, recvWindow=10000)
-            except Exception as e:
-                if "-1021" in str(e):
-                    self.logger.warning("Timestamp error (-1021). Retrying with re-sync...")
-                    self.sync_time()
-                    positions = self.client.get_position_risk(symbol=self.symbol, recvWindow=10000)
-                else:
-                    raise e
+            positions = self._get_position_risk_with_retry(symbol=self.symbol, recvWindow=10000)
                     
             for pos in positions:
                 if pos['symbol'] == self.symbol:
@@ -310,15 +272,7 @@ class ExchangeClient:
         """Closes all positions for the current symbol by placing an offsetting market order."""
         try:
             # Get positions using get_position_risk (more efficient)
-            try:
-                positions = self.client.get_position_risk(symbol=self.symbol, recvWindow=10000)
-            except Exception as e:
-                 # Auto retry once on timestamp error
-                 if "-1021" in str(e):
-                     self.sync_time()
-                     positions = self.client.get_position_risk(symbol=self.symbol, recvWindow=10000)
-                 else:
-                     raise e
+            positions = self._get_position_risk_with_retry(symbol=self.symbol, recvWindow=10000)
 
             for pos in positions:
                 if pos['symbol'] == self.symbol:
@@ -379,3 +333,24 @@ class ExchangeClient:
         except Exception as e:
             self.logger.error(f"Error fetching yesterday's stats: {e}")
             return 0.0, 0
+
+    # Wrapper methods to apply decorator
+    @retry_on_timestamp_error
+    def _change_leverage_with_retry(self, symbol, leverage):
+        return self.client.change_leverage(symbol=symbol, leverage=leverage, recvWindow=10000)
+
+    @retry_on_timestamp_error
+    def _klines_with_retry(self, symbol, interval, limit):
+        return self.client.klines(symbol, interval=interval, limit=limit)
+
+    @retry_on_timestamp_error
+    def _new_order_with_retry(self, **kwargs):
+        return self.client.new_order(**kwargs)
+
+    @retry_on_timestamp_error
+    def _account_with_retry(self, **kwargs):
+        return self.client.account(**kwargs)
+
+    @retry_on_timestamp_error
+    def _get_position_risk_with_retry(self, **kwargs):
+        return self.client.get_position_risk(**kwargs)

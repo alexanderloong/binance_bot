@@ -52,8 +52,7 @@ def main():
             pre_close_buffer = 10
             post_open_buffer = 60
             
-            should_sleep = (seconds_remaining > pre_close_buffer) and \
-                           (seconds_remaining < (tf_seconds - post_open_buffer))
+            should_sleep = pre_close_buffer < seconds_remaining < (tf_seconds - post_open_buffer)
 
             if should_sleep:
                 sleep_duration = seconds_remaining - pre_close_buffer
