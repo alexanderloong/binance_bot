@@ -54,6 +54,10 @@ def main():
         logger.warning(f"Could not send full startup message: {e}")
         notifier.send_lark_message(f"🚀 **Binance Bot Started**\nSymbol: {SYMBOL}\nTimeframe: {TIMEFRAME}\nIP: {public_ip}")
 
+    # --- Send Daily Report on Startup ---
+    logger.info("Sending daily report on startup...")
+    strategy.send_daily_report()
+
     # Daily Report Tracking
     # If bot starts after 9 AM, mark today as already reported to avoid re-sending
     now_startup = datetime.now(VN_TZ)
