@@ -387,20 +387,23 @@ class Strategy:
     def send_daily_report(self) -> None:
         """Sends a summary report of yesterday's performance."""
         try:
-            total_pnl, trade_count = self.client.get_yesterday_stats()
+            total_pnl, trade_count, total_fee = self.client.get_yesterday_stats()
             balance = self.client.get_balance()
+            
+            net_pnl = total_pnl - total_fee
             
             yesterday = (datetime.now() - timedelta(days=1)).strftime('%d-%m-%Y')
             
             message = (
                 f"📊 **DAILY PERFORMANCE REPORT ({yesterday})**\n"
                 f"--------------------------------\n"
-                f"💰 Total PNL: {total_pnl:.2f} USDT\n"
-                f"📈 Trade Entries: {trade_count}\n"
+                f"💰 Net PNL: {net_pnl:.2f} USDT\n"
+                f"   (Gross: {total_pnl:.2f} USDT | Fee: -{total_fee:.2f} USDT)\n"
+                f"📈 Positions Closed: {trade_count}\n"
                 f"🏦 Current Balance: {balance:.2f} USDT\n"
             )
             
-            self.logger.info(f"Sending daily report: PnL {total_pnl}, Trades {trade_count}")
+            self.logger.info(f"Sending daily report: Net PNL {net_pnl:.2f}, Trades {trade_count}")
             if self.notifier:
                 self.notifier.send_lark_message(message)
                 

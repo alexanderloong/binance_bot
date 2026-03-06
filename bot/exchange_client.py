@@ -296,11 +296,11 @@ class ExchangeClient:
         except Exception as e:
             self.logger.error(f"Error closing positions: {e}")
             return False
-    def get_yesterday_stats(self) -> Tuple[float, int]:
+    def get_yesterday_stats(self) -> Tuple[float, int, float]:
         """
-        Fetches realized PnL and number of trades for the previous calendar day.
+        Fetches realized PnL, number of trades, and total commission fees for the previous calendar day.
         Returns:
-            Tuple[float, int]: (Total PnL, Trade Count)
+            Tuple[float, int, float]: (Total PnL, Trade Count, Total Fee)
         """
         try:
             # Calculate yesterday's range (00:00:00 to 23:59:59)
@@ -311,31 +311,38 @@ class ExchangeClient:
             
             self.logger.info(f"Fetching stats from {yesterday.date()} ({start_time} to {end_time})")
             
-            trades = self.client.get_account_trades(
+            # Fetch REALIZED_PNL
+            pnl_history = self._get_income_history_with_retry(
                 symbol=self.symbol,
+                incomeType="REALIZED_PNL",
                 startTime=start_time,
                 endTime=end_time,
-                recvWindow=10000
+                limit=1000
             )
             
-            total_pnl = 0.0
-            unique_trades = set()
+            # Fetch COMMISSION
+            fee_history = self._get_income_history_with_retry(
+                symbol=self.symbol,
+                incomeType="COMMISSION",
+                startTime=start_time,
+                endTime=end_time,
+                limit=1000
+            )
             
-            if trades:
-                for t in trades:
-                    total_pnl += float(t.get('realizedPnl', 0))
-                    # A "trade" in user context usually means a position entry. 
-                    # We can approximate by looking at orders that increased position or just count unique orders.
-                    # Given the request, counting unique orderIds that are not 'reduceOnly' or similar might be complex.
-                    # We'll count unique orderIds for now as a proxy for "lệnh vào".
-                    unique_trades.add(t['orderId'])
+            total_pnl = sum(float(item['income']) for item in pnl_history) if pnl_history else 0.0
+            trade_count = len(pnl_history) if pnl_history else 0
+            total_fee = sum(float(item['income']) for item in fee_history) if fee_history else 0.0
             
-            return total_pnl, len(unique_trades)
+            return total_pnl, trade_count, abs(total_fee)
         except Exception as e:
             self.logger.error(f"Error fetching yesterday's stats: {e}")
-            return 0.0, 0
+            return 0.0, 0, 0.0
 
     # Wrapper methods to apply decorator
+    @retry_on_timestamp_error
+    def _get_income_history_with_retry(self, **kwargs):
+        return self.client.get_income_history(**kwargs)
+
     @retry_on_timestamp_error
     def _change_leverage_with_retry(self, symbol, leverage):
         return self.client.change_leverage(symbol=symbol, leverage=leverage, recvWindow=10000)
