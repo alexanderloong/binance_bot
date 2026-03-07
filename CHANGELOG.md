@@ -1,3 +1,8 @@
+## [1.16.0] - 2026-03-07
+### Changed
+- **Optimization**: Updated `ATR_MULTIPLIER` and other strategy parameters based on performance analysis.
+- **Documentation**: Incremented version to 1.16.0.
+
 ## [1.15.2] - 2026-03-04
 ### Changed
 - **Cleanup**: Removed redundant "All Positions Closed" Lark notification.
