@@ -44,7 +44,7 @@ class TradingConfig:
     ADX_LENGTH: int = 14
     ADX_THRESHOLD: int = 18
     ATR_LENGTH: int = 14
-    ATR_MULTIPLIER: float = 0.7
+    ATR_MULTIPLIER: float = 0.74
     
     # Momentum (RSI)
     RSI_LENGTH: int = 14
