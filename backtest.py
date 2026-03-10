@@ -35,7 +35,7 @@ def simulate(df, use_ema_filter=True, st_length=SUPERTREND_LENGTH, st_factor=SUP
     stop_loss_price = 0
     trades = []
     # Fee: 0.05% for Taker (Market Orders)
-    commission_rate = 0.0005
+    commission_rate = 0.00045
     
     st_dir_col = f"SUPERTd_{st_length}_{st_factor}"
     # Use the custom EMA column if provided (for comparison), otherwise default to config EMA

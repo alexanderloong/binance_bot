@@ -96,13 +96,16 @@ class Strategy:
             self.logger.warning(f"SOFTWARE STOP LOSS HIT at {current_price:.2f} (Target: {self.stop_loss_price:.2f}). Closing position.")
             
             if self.notifier:
+                est_fee = (entry_price + current_price) * abs(current_pos_amt) * 0.00045
                 pnl = 0.0
                 roi = 0.0
                 if current_pos_amt > 0:
-                    pnl = (current_price - entry_price) * abs(current_pos_amt)
+                    raw_pnl = (current_price - entry_price) * abs(current_pos_amt)
+                    pnl = raw_pnl - est_fee
                     roi = (current_price - entry_price) / entry_price * settings.LEVERAGE * 100
                 else:
-                    pnl = (entry_price - current_price) * abs(current_pos_amt)
+                    raw_pnl = (entry_price - current_price) * abs(current_pos_amt)
+                    pnl = raw_pnl - est_fee
                     roi = (entry_price - current_price) / entry_price * settings.LEVERAGE * 100
 
                 self.notifier.send_lark_message(
@@ -128,7 +131,9 @@ class Strategy:
             if (roi * 100) >= settings.ROI_TP:
                 self.logger.info(f"ROI TAKE PROFIT TARGET REACHED: {roi*100:.2f}% (Target: {settings.ROI_TP}%). Closing position.")
                 if self.notifier:
-                    pnl = roi * entry_price * abs(current_pos_amt) / settings.LEVERAGE # approximate
+                    est_fee = (entry_price + current_price) * abs(current_pos_amt) * 0.0005
+                    raw_pnl = roi * entry_price * abs(current_pos_amt) / settings.LEVERAGE # approximate
+                    pnl = raw_pnl - est_fee
                     self.notifier.send_lark_message(
                         f"💰 **ROI TAKE PROFIT TARGET REACHED**\n"
                         f"Current Price: {current_price:.2f}\n"
@@ -314,12 +319,14 @@ class Strategy:
                  df = self.client.fetch_ohlcv(limit=1)
                  if df is not None and not df.empty:
                     curr_price = df['close'].iloc[-1]
+                    est_fee = (entry + curr_price) * abs(amt) * 0.0005
                     if amt > 0:
                         roi = (curr_price - entry) / entry * settings.LEVERAGE * 100
-                        pnl = (curr_price - entry) * abs(amt)
+                        raw_pnl = (curr_price - entry) * abs(amt)
                     else:
                         roi = (entry - curr_price) / entry * settings.LEVERAGE * 100
-                        pnl = (entry - curr_price) * abs(amt)
+                        raw_pnl = (entry - curr_price) * abs(amt)
+                    pnl = raw_pnl - est_fee
                     pnl_str = f"\nPNL: {pnl:.2f} USDT\nROI: {roi:.2f}%"
         except:
             pass
