@@ -15,7 +15,8 @@ from config import (
     RSI_LENGTH, RSI_OVERBOUGHT, RSI_OVERSOLD, RSI_LONG_THRESHOLD,
     VOLUME_MA_LENGTH,
     EMA_SLOPE_EMA_LENGTH, EMA_SLOPE_LOOKBACK, EMA_SLOPE_THRESHOLD, REDUCED_POSITION_SIZE_PERCENT,
-    RSI_DIV_LOOKBACK, RSI_DIV_MIN_RSI, RSI_DIV_PARTIAL_CLOSE_PCT, settings
+    RSI_DIV_LOOKBACK, RSI_DIV_MIN_RSI, RSI_DIV_PARTIAL_CLOSE_PCT, settings,
+    TAKER_FEE_RATE
 )
 
 LIMIT = 150000
@@ -34,8 +35,8 @@ def simulate(df, use_ema_filter=True, st_length=SUPERTREND_LENGTH, st_factor=SUP
     liquidation_price = 0
     stop_loss_price = 0
     trades = []
-    # Fee: 0.05% for Taker (Market Orders)
-    commission_rate = 0.00045
+    # Fee: Taker rate from config
+    commission_rate = TAKER_FEE_RATE
     
     st_dir_col = f"SUPERTd_{st_length}_{st_factor}"
     # Use the custom EMA column if provided (for comparison), otherwise default to config EMA

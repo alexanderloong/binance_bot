@@ -37,6 +37,9 @@ class TradingConfig:
     LEVERAGE: int = 10
     POSITION_SIZE_PERCENT: float = 0.2
     
+    # Fee Rate (Taker - Binance Futures)
+    TAKER_FEE_RATE: float = 0.00045
+
     # Safety
     MAX_TRADES_PER_HOUR: int = 5
     
@@ -98,3 +101,4 @@ REDUCED_POSITION_SIZE_PERCENT = settings.REDUCED_POSITION_SIZE_PERCENT
 RSI_DIV_LOOKBACK = settings.RSI_DIV_LOOKBACK
 RSI_DIV_MIN_RSI = settings.RSI_DIV_MIN_RSI
 RSI_DIV_PARTIAL_CLOSE_PCT = settings.RSI_DIV_PARTIAL_CLOSE_PCT
+TAKER_FEE_RATE = settings.TAKER_FEE_RATE
