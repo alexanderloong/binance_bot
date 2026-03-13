@@ -419,7 +419,16 @@ def get_backtest_data(limit=LIMIT):
             print(f"Estimated time: ~{int(num_batches/(WORKERS/SLEEP))} seconds (Safety Mode needed for large data)")
             
             # Generate end times
-            end_times = [now_ms - (i * batch_size * ms_interval) for i in range(num_batches)]
+            # Binance Futures launched ~Sep 2019. Filter out any end_times before that
+            # to avoid API error -1023 "Start time is greater than end time."
+            BINANCE_FUTURES_LAUNCH_MS = 1569888000000  # 2019-10-01 00:00:00 UTC
+            end_times = [
+                now_ms - (i * batch_size * ms_interval)
+                for i in range(num_batches)
+                if (now_ms - (i * batch_size * ms_interval)) > BINANCE_FUTURES_LAUNCH_MS
+            ]
+            if len(end_times) < num_batches:
+                print(f"ℹ️  Trimmed to {len(end_times)} batches (history limit reached before 2019-10-01).")
 
             def fetch_single_batch(end_ts):
                 # Rate limit: Sleep 1.0s per thread per request
