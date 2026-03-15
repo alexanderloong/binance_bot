@@ -1,5 +1,6 @@
 import time
 import logging
+import threading
 from datetime import datetime, timedelta
 from typing import Optional, Tuple, Dict, Any, List
 
@@ -8,6 +9,9 @@ import pandas as pd
 from binance.um_futures import UMFutures
 from binance.websocket.um_futures.websocket_client import UMFuturesWebsocketClient
 from config import settings
+
+# REST API timeouts: (connect_timeout, read_timeout) in seconds
+REST_TIMEOUT = (10, 30)
 
 # --- GLOBAL TIME SYNC ---
 _GLOBAL_TIME_OFFSET = 0.0
@@ -45,8 +49,14 @@ class ExchangeClient:
         if settings.USE_TESTNET:
             base_url = "https://testnet.binancefuture.com"
             ws_base_url = "wss://stream.binancefuture.com/ws"
-            
-        self.client = UMFutures(key=settings.API_KEY, secret=settings.SECRET, base_url=base_url)
+
+        self._ws_base_url = ws_base_url
+        self.client = UMFutures(
+            key=settings.API_KEY,
+            secret=settings.SECRET,
+            base_url=base_url,
+            timeout=REST_TIMEOUT,
+        )
         
         # Prepare symbol
         self.symbol: str = settings.SYMBOL.replace("/", "").upper()
@@ -54,11 +64,17 @@ class ExchangeClient:
         # --- WEBSOCKET STATE ---
         self.klines_buffer: Optional[pd.DataFrame] = None
         self.last_ws_update: float = synced_time()
+        self._ws_lock = threading.Lock()
+        self._ws_reconnecting = False
         self.ws_client = UMFuturesWebsocketClient(on_message=self._on_ws_message, stream_url=ws_base_url)
         self._start_kline_stream()
-        
+
+        # Start WS health monitor thread
+        self._ws_monitor_thread = threading.Thread(target=self._ws_health_monitor, daemon=True)
+        self._ws_monitor_thread.start()
+
         # Symbol information (precision)
-        self.qty_precision: int = 3 # Default for BTCUSDT safety
+        self.qty_precision: int = 3  # Default for BTCUSDT safety
         self.price_precision: int = 2
         self.get_symbol_info()
         
@@ -91,6 +107,46 @@ class ExchangeClient:
         kline_stream = f"{self.symbol.lower()}@kline_{settings.TIMEFRAME}"
         self.ws_client.subscribe(stream=kline_stream, id=1)
         self.logger.info(f"Subscribed to WebSocket stream: {kline_stream}")
+
+    def _ws_health_monitor(self) -> None:
+        """Background thread: reconnects WebSocket if silent for > 180s."""
+        STALE_THRESHOLD = 180  # seconds without any WS update
+        CHECK_INTERVAL = 30    # how often to check
+        while True:
+            time.sleep(CHECK_INTERVAL)
+            try:
+                age = synced_time() - self.last_ws_update
+                if age > STALE_THRESHOLD and not self._ws_reconnecting:
+                    with self._ws_lock:
+                        if self._ws_reconnecting:
+                            continue
+                        self._ws_reconnecting = True
+                    self.logger.warning(
+                        f"WS monitor: no update for {age:.0f}s. Reconnecting WebSocket..."
+                    )
+                    self._reconnect_ws()
+            except Exception as e:
+                self.logger.error(f"WS health monitor error: {e}")
+
+    def _reconnect_ws(self) -> None:
+        """Closes existing WebSocket client and starts a fresh one."""
+        try:
+            try:
+                self.ws_client.stop()
+            except Exception:
+                pass
+            time.sleep(3)  # brief pause before reconnecting
+            self.ws_client = UMFuturesWebsocketClient(
+                on_message=self._on_ws_message,
+                stream_url=self._ws_base_url,
+            )
+            self._start_kline_stream()
+            self.last_ws_update = synced_time()
+            self.logger.info("WebSocket reconnected successfully.")
+        except Exception as e:
+            self.logger.error(f"WebSocket reconnect failed: {e}")
+        finally:
+            self._ws_reconnecting = False
 
     def _on_ws_message(self, _, message) -> None:
         """Handles incoming WebSocket messages."""
