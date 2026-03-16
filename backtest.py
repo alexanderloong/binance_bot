@@ -17,7 +17,7 @@ from config import (
     TAKER_FEE_RATE
 )
 
-LIMIT = 30000
+LIMIT = 35000
 WORKERS = 5
 SLEEP = 1.5
 GEN_CHART = True

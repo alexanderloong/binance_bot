@@ -1,9 +1,0 @@
-binance-connector
-binance-futures-connector
-pandas
-python-dotenv
-schedule
-numpy
-pytz
-matplotlib
-seaborn
