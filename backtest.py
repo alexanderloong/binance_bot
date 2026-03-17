@@ -17,7 +17,7 @@ from config import (
     TAKER_FEE_RATE
 )
 
-LIMIT = 35000
+LIMIT = 150000
 WORKERS = 5
 SLEEP = 1.5
 GEN_CHART = True
@@ -598,6 +598,8 @@ def run_backtest():
             plot_performance(df_final, trades, res)
     except Exception as e:
         print(f"Could not generate chart: {e}")
+        
+    return res, trades
 
 if __name__ == "__main__":
     run_backtest()
