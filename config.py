@@ -4,9 +4,9 @@ from dataclasses import dataclass
 
 # ==========================================
 # BINANCE TRADING BOT CONFIGURATION
-# Version: 1.16.0 (Production Stable Release 2026)
-# Date: 2026-03-02
-# Strategy: Pure Trend Following (SuperTrend + EMA + ADX + RSI + Vol)
+# Version: 1.16.1 (Optimized EMA Release)
+# Date: 2026-03-18
+# Strategy: EMA Filter + Volume Confirmed SuperTrend
 # ==========================================
 
 # Load .env from project root or resource directory
@@ -31,7 +31,7 @@ class TradingConfig:
     ROI_TP = 77.5                # Take Profit target in % ROI (from optimization)
     SUPERTREND_LENGTH: int = 18
     SUPERTREND_FACTOR: float = 1.45
-    EMA_LENGTH: int = 102
+    EMA_LENGTH: int = 97
     
     # Risk Management
     LEVERAGE: int = 10

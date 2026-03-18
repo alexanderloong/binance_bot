@@ -1,3 +1,12 @@
+## [1.16.1] - 2026-03-18
+### Added
+- **PnL Milestone**: Achieved **+756% PnL** in a 2-year backtest for BTC/USDT 15m using the EMA + Volume Filter combo.
+### Optimized
+- **EMA Length**: Fine-tuned EMA from 102 down to **97** after thorough optimization.
+### Changed
+- **Default Strategy**: Revised default trading filters to **EMA + Volume** only, as it yielded the highest Profit Factor (1.25) and Net Profit compared to ADX-based filters.
+- **Documentation**: Incremented version to 1.16.1 across all files.
+
 ## [1.16.0] - 2026-03-07
 ### Changed
 - **Optimization**: Updated `ATR_MULTIPLIER` and other strategy parameters based on performance analysis.

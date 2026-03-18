@@ -1,4 +1,4 @@
-# Binance Futures Trading Bot (v1.15.2 - 2026 Production Stable)
+# Binance Futures Trading Bot (v1.16.1 - 2026 Optimized)
 
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
 ![Python](https://img.shields.io/badge/python-3.10%2B-blue)
@@ -7,7 +7,7 @@
 
 A robust, trend-following trading bot strategies for Binance Futures. This bot uses a combination of **SuperTrend**, **EMA (Exponential Moving Average)**, **ADX (Average Directional Index)**, **RSI (Relative Strength Index)**, and Volume analysis to execute trades.
 
-> **Note**: Version 1.15.2 is the official Production Stable release for 2026. Core logic and risk configurations are finalized for long-term stability.
+> **Note**: Version 1.16.1 is the **Optimized EMA Release**. It features a specialized filter configuration (EMA + Volume) that achieved **+756% PnL** during a 2-year backtest on BTC/USDT (15m).
 
 ## 🚀 Features
 
@@ -80,7 +80,7 @@ Global settings are managed in `config.py` (and the `TradingConfig` class). Key 
 -   **Position Size**: `20%` of Balance per trade
 -   **Indicators**:
     -   SuperTrend (Length 18, Factor 1.45)
-    -   EMA (Length 102)
+    -   EMA (Length 97) - *Optimized for 15m BTC*
     -   RSI (14, OB 64, OS 36)
 
 ## 📊 Strategy Overview
