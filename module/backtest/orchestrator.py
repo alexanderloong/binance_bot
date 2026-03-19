@@ -28,7 +28,7 @@ from module.backtest.data_loader import BacktestDataLoader
 from module.backtest.simulator import Simulator
 from module.backtest.reporter import BacktestReporter
 
-LIMIT = 150000
+LIMIT = 100000
 WORKERS = 5
 SLEEP = 1.5
 GEN_CHART = True
@@ -131,6 +131,7 @@ def run_backtest():
         use_ema_filter=True,
         use_volume_filter=True,
         use_htf_filter=True,
+        use_breakeven=True,
     )
 
     # Log results
