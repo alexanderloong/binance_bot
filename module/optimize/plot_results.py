@@ -6,10 +6,10 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 
 # Add parent directory to path to import modules
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
-from backtest import get_backtest_data, simulate
-from bot.data_processor import DataProcessor
+from module.backtest.orchestrator import get_backtest_data, simulate
+from module.bot.data_processor import DataProcessor
 from config import EMA_LENGTH, VOLUME_MA_LENGTH
 
 def plot_performance(df=None, trades=None, res=None):

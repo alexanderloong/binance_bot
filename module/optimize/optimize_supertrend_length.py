@@ -2,20 +2,19 @@
 import numpy as np
 import pandas as pd
 from base_optimizer import BaseOptimizer
-from backtest import simulate
-from bot.data_processor import DataProcessor
+from module.backtest.orchestrator import simulate
+from module.bot.data_processor import DataProcessor
 from config import (
-    ADX_LENGTH, ATR_LENGTH, 
-    ATR_MULTIPLIER, ADX_THRESHOLD, RSI_LENGTH, RSI_OVERBOUGHT, RSI_OVERSOLD,
-    VOLUME_MA_LENGTH, EMA_LENGTH, SUPERTREND_LENGTH
+    ADX_THRESHOLD, RSI_OVERBOUGHT, RSI_OVERSOLD,
+    VOLUME_MA_LENGTH, EMA_LENGTH, SUPERTREND_FACTOR
 )
 
 import itertools
 
-def run_simulation(st_fac, df_final):
+def run_simulation(st_len, df_final):
     """
-    Run simulation with a specific SuperTrend factor.
-    EMA and SuperTrend length are fixed from config.
+    Run simulation with a specific SuperTrend length.
+    EMA and SuperTrend factor are fixed from config.
     """
     
     # Working on a copy
@@ -24,17 +23,17 @@ def run_simulation(st_fac, df_final):
     # Calculate EMA with config param
     df_st = DataProcessor.calculate_ema(df_st, length=EMA_LENGTH)
     
-    # Calculate SuperTrend with specific factor
-    df_st = DataProcessor.calculate_supertrend(df_st, length=SUPERTREND_LENGTH, multiplier=st_fac)
+    # Calculate SuperTrend with specific length
+    df_st = DataProcessor.calculate_supertrend(df_st, length=st_len, multiplier=SUPERTREND_FACTOR)
     
     # Map EMA to filter column
     df_st['EMA_FILTER'] = df_st[f'EMA_{EMA_LENGTH}']
     
     # Pass parameters to simulate
-    res, _ = simulate(df_st, st_length=SUPERTREND_LENGTH, st_factor=st_fac)
+    res, _ = simulate(df_st, st_length=st_len, st_factor=SUPERTREND_FACTOR)
     
     return {
-        'st_factor': st_fac,
+        'st_length': st_len,
         'pnl_pct': res['pnl_pct'],
         'win_rate': res['win_rate'],
         'pf': res['profit_factor'],
@@ -43,23 +42,23 @@ def run_simulation(st_fac, df_final):
     }
 
 def run_optimization():
-    optimizer = BaseOptimizer("SuperTrend Factor Optimization")
+    optimizer = BaseOptimizer("SuperTrend Length Optimization")
     
     print(f"Base Settings: ADX>{ADX_THRESHOLD}, RSI<{RSI_OVERBOUGHT}/>{RSI_OVERSOLD}, Vol MA>{VOLUME_MA_LENGTH}")
-    print(f"Fixed: EMA Length={EMA_LENGTH}, SuperTrend Length={SUPERTREND_LENGTH}")
+    print(f"Fixed: EMA Length={EMA_LENGTH}, SuperTrend Factor={SUPERTREND_FACTOR}")
     
     if not optimizer.load_and_prepare_data():
         return
 
-    # Define SuperTrend factor range
-    st_factors = np.arange(1.4, 2.0, 0.01)
+    # Define SuperTrend length range
+    st_lengths = np.arange(10, 22, 1)
     
     # Create tasks
-    tasks = [(st_fac,) for st_fac in st_factors]
+    tasks = [(st_len,) for st_len in st_lengths]
     
     results = optimizer.run_parallel(tasks, run_simulation)
     
-    opt_df = optimizer.save_and_analyze(results, "optimization_results_st_factor.csv")
+    opt_df = optimizer.save_and_analyze(results, "optimization_results_st_length.csv")
     
     if opt_df is not None and not opt_df.empty:
         # Recommend the best overall (Balance MDD and PnL)

@@ -6,10 +6,10 @@ import sys
 import os
 
 # Add project root to sys.path if not present
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
-from backtest import get_backtest_data
-from bot.data_processor import DataProcessor
+from module.backtest.orchestrator import get_backtest_data
+from module.bot.data_processor import DataProcessor
 from config import (
     EMA_LENGTH, SUPERTREND_LENGTH, SUPERTREND_FACTOR, 
     ATR_LENGTH, VOLUME_MA_LENGTH

@@ -3,10 +3,10 @@ import time
 from datetime import datetime, timezone, timedelta
 
 VN_TZ = timezone(timedelta(hours=7))
-from bot.exchange_client import ExchangeClient
-from bot.strategy import Strategy
-from bot.notifier import Notifier
-from bot.utils import setup_logger, parse_timeframe_to_seconds, get_public_ip
+from module.bot.exchange_client import ExchangeClient
+from module.bot.strategy import Strategy
+from module.bot.notifier import Notifier
+from module.bot.utils import setup_logger, parse_timeframe_to_seconds, get_public_ip
 from config import settings, SYMBOL, TIMEFRAME, LARK_WEBHOOK_URL
 
 def main():

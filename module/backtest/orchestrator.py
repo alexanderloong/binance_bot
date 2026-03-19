@@ -1,6 +1,6 @@
 import os
 import time
-from bot.data_processor import DataProcessor
+from module.bot.data_processor import DataProcessor
 from config import (
     SYMBOL,
     TIMEFRAME,
@@ -15,9 +15,9 @@ from config import (
     TAKER_FEE_RATE,
 )
 
-from bot.backtest.data_loader import BacktestDataLoader
-from bot.backtest.simulator import Simulator
-from bot.backtest.reporter import BacktestReporter
+from module.backtest.data_loader import BacktestDataLoader
+from module.backtest.simulator import Simulator
+from module.backtest.reporter import BacktestReporter
 
 LIMIT = 150000
 WORKERS = 5
@@ -87,7 +87,7 @@ def run_backtest():
 
     try:
         if GEN_CHART:
-            from optimize.plot_results import plot_performance
+            from module.optimize.plot_results import plot_performance
             print("\nGenerating Performance Chart...")
             plot_performance(df_final, trades, res)
     except Exception as e:

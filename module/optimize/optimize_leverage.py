@@ -2,7 +2,7 @@
 import numpy as np
 import pandas as pd
 from base_optimizer import BaseOptimizer
-from backtest import simulate
+from module.backtest.orchestrator import simulate
 
 # ============================================================================
 # OPTIMIZATION TARGETS

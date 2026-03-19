@@ -1,7 +1,7 @@
 import numpy as np
 from base_optimizer import BaseOptimizer
-from backtest import simulate
-from bot.data_processor import DataProcessor
+from module.backtest.orchestrator import simulate
+from module.bot.data_processor import DataProcessor
 from config import (
     SUPERTREND_LENGTH,
     SUPERTREND_FACTOR,

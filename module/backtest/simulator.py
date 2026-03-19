@@ -1,6 +1,6 @@
 import pandas as pd
-from bot.utils import parse_timeframe_to_seconds
-from bot.backtest.metrics import MetricsCalculator
+from module.bot.utils import parse_timeframe_to_seconds
+from module.backtest.metrics import MetricsCalculator
 
 class Simulator:
     """Mô phỏng giao dịch Backtest."""

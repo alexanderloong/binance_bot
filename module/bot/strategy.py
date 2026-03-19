@@ -5,7 +5,7 @@ from typing import Optional, Any
 import pandas as pd # Type hint requirement
 
 from config import settings
-from bot.notifier import Notifier
+from module.bot.notifier import Notifier
 from .data_processor import DataProcessor
 from .utils import parse_timeframe_to_seconds
 

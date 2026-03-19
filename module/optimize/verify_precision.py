@@ -3,9 +3,9 @@ import sys
 import os
 
 # Add the current directory to path so we can import bot
-sys.path.append(os.getcwd())
+sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
-from bot.exchange_client import ExchangeClient
+from module.bot.exchange_client import ExchangeClient
 from config import SYMBOL
 
 def test_precision():

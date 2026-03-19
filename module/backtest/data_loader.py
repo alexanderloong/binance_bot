@@ -4,7 +4,7 @@ import math
 from concurrent.futures import ThreadPoolExecutor
 import pandas as pd
 from binance.um_futures import UMFutures
-from bot.utils import parse_timeframe_to_seconds
+from module.bot.utils import parse_timeframe_to_seconds
 
 class BacktestDataLoader:
     """Tải và Cache dữ liệu Kline từ Binance cho Backtest."""
