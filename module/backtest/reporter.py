@@ -1,6 +1,7 @@
 import os
 import time
 import pandas as pd
+from module.backtest.breakdown import BacktestBreakdown
 
 class BacktestReporter:
     """Xử lý output, in kết quả và lưu log ra file."""
@@ -54,6 +55,13 @@ class BacktestReporter:
             avg_trades_per_day = res["total_trades"] / total_days if total_days > 0 else 0
             app_log(f"Data Range: {start_time} -> {end_time} ({total_days} days)")
             app_log(f"Avg Trades/Day: {avg_trades_per_day:.2f}")
+
+        app_log("\n")
+        initial_bal = res['final_balance'] / (1 + (res['pnl_pct']/100)) if res.get('pnl_pct', 0) != -100 else 1000.0
+        breakdown_str = BacktestBreakdown.generate_breakdown(trades, initial_balance=initial_bal)
+        for line in breakdown_str.split('\n'):
+            app_log(line)
+        app_log("\n")
 
         try:
             with open(log_file, "w", encoding="utf-8") as f:
