@@ -44,7 +44,7 @@ class MetricsCalculator:
             else (float("inf") if gross_profit > 0 else 0)
         )
 
-        # Calmar Ratio = Annualized PnL / Max Drawdown
+        # Annualized PnL (CAGR - Compound Annual Growth Rate)
         days_elapsed = 1
         if trades:
             first_time = trades[0]["time"]
@@ -52,7 +52,12 @@ class MetricsCalculator:
             if isinstance(first_time, pd.Timestamp) and isinstance(last_time, pd.Timestamp):
                 delta = last_time - first_time
                 days_elapsed = max(delta.days, 1)
-        annualized_pnl_pct = pnl_pct * (365 / days_elapsed)
+        
+        # Công thức CAGR: (Vốn_mới / Vốn_cũ) ^ (365 / Tổng_số_ngày) - 1
+        cagr = ((final_balance / initial_balance) ** (365 / days_elapsed)) - 1
+        annualized_pnl_pct = cagr * 100
+
+        # Calmar Ratio = CAGR / Max Drawdown
         calmar_ratio = (
             annualized_pnl_pct / (mdd * 100)
             if mdd > 0
