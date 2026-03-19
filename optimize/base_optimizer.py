@@ -11,8 +11,8 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from backtest import get_backtest_data
 from bot.data_processor import DataProcessor
 from config import (
-    EMA_LENGTH, SUPERTREND_LENGTH, SUPERTREND_FACTOR, ADX_LENGTH, 
-    ATR_LENGTH, RSI_LENGTH, VOLUME_MA_LENGTH, EMA_SLOPE_EMA_LENGTH
+    EMA_LENGTH, SUPERTREND_LENGTH, SUPERTREND_FACTOR, 
+    ATR_LENGTH, VOLUME_MA_LENGTH
 )
 
 class BaseOptimizer:
@@ -35,11 +35,8 @@ class BaseOptimizer:
         df_ha = DataProcessor.calculate_heikin_ashi(df)
         df_st = DataProcessor.calculate_supertrend(df_ha)
         df_st[f'EMA_{EMA_LENGTH}'] = DataProcessor.calculate_ema(df_st, length=EMA_LENGTH)[f'EMA_{EMA_LENGTH}']
-        df_st['ADX'] = DataProcessor.calculate_adx(df, length=ADX_LENGTH)
         df_st['ATR'] = DataProcessor.calculate_atr(df, length=ATR_LENGTH)
-        df_st['RSI'] = DataProcessor.calculate_rsi(df, length=RSI_LENGTH)
         df_st = DataProcessor.calculate_volume_ma(df_st, length=VOLUME_MA_LENGTH)
-        df_st[f'EMA_{EMA_SLOPE_EMA_LENGTH}'] = DataProcessor.calculate_ema(df_st, length=EMA_SLOPE_EMA_LENGTH)[f'EMA_{EMA_SLOPE_EMA_LENGTH}']
         
         self.df_final = df_st
         return True
