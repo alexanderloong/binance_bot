@@ -1,11 +1,13 @@
 import os
 import time
 import pandas as pd
+from config import CONSOLE_TRADE_LIMIT
 from module.backtest.breakdown import BacktestBreakdown
+
 
 class BacktestReporter:
     """Xử lý output, in kết quả và lưu log ra file."""
-    
+
     @staticmethod
     def log_results(res, trades, df):
         log_dir = "resource/backtest_logs"
@@ -20,8 +22,13 @@ class BacktestReporter:
             print(msg)
             log_lines.append(str(msg))
 
-        app_log("--- Trade History ---")
-        for t in trades:
+        print(
+            f"--- Trade History (Showing last {CONSOLE_TRADE_LIMIT} trades, full log in file) ---"
+        )
+        log_lines.append("--- Trade History ---")
+
+        total_trades_count = len(trades)
+        for i, t in enumerate(trades):
             time_str = t["time"]
             if isinstance(time_str, pd.Timestamp):
                 time_str = time_str.strftime("%Y-%m-%d %H:%M")
@@ -31,14 +38,19 @@ class BacktestReporter:
             pnl = t.get("pnl", 0)
             amount = t.get("amount", 0)
 
-            log_msg = f"[{time_str}] {type_str:<12} at {price:>10.2f}"
+            log_msg = f"[{time_str}] {type_str:<15} at {price:>10.2f}"
             if amount > 0:
                 log_msg += f", Amt: {amount:>8.4f}"
             if pnl != 0:
                 pnl_label = "Fee" if "OPEN" in type_str else "PnL"
                 log_msg += f", {pnl_label}: {pnl:>8.2f} USDT"
 
-            app_log(log_msg)
+            log_lines.append(log_msg)
+            if (
+                CONSOLE_TRADE_LIMIT <= 0
+                or (total_trades_count - i) <= CONSOLE_TRADE_LIMIT
+            ):
+                print(log_msg)
 
         app_log(f"\nFinal Balance: {res['final_balance']:.2f} USDT")
         app_log(f"Total PnL: {res['pnl_pct']:.2f}%")
@@ -52,14 +64,22 @@ class BacktestReporter:
             start_time = df.iloc[0]["timestamp"]
             end_time = df.iloc[-1]["timestamp"]
             total_days = (end_time - start_time).days
-            avg_trades_per_day = res["total_trades"] / total_days if total_days > 0 else 0
+            avg_trades_per_day = (
+                res["total_trades"] / total_days if total_days > 0 else 0
+            )
             app_log(f"Data Range: {start_time} -> {end_time} ({total_days} days)")
             app_log(f"Avg Trades/Day: {avg_trades_per_day:.2f}")
 
         app_log("\n")
-        initial_bal = res['final_balance'] / (1 + (res['pnl_pct']/100)) if res.get('pnl_pct', 0) != -100 else 1000.0
-        breakdown_str = BacktestBreakdown.generate_breakdown(trades, initial_balance=initial_bal)
-        for line in breakdown_str.split('\n'):
+        initial_bal = (
+            res["final_balance"] / (1 + (res["pnl_pct"] / 100))
+            if res.get("pnl_pct", 0) != -100
+            else 1000.0
+        )
+        breakdown_str = BacktestBreakdown.generate_breakdown(
+            trades, initial_balance=initial_bal
+        )
+        for line in breakdown_str.split("\n"):
             app_log(line)
         app_log("\n")
 
