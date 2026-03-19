@@ -1,3 +1,11 @@
+## [2.0.0] - 2026-03-19
+### Changed
+- **Project Structure**: Fully restructured codebase according to SOLID principles.
+- **Architectural Shift**: Decoupled monolithic files into a modular system (`module/bot`, `module/backtest`, `module/optimize`).
+- **Data Pipeline**: Split API fetching, simulation, and metrics calculations into separate decoupled services (`data_loader.py`, `simulator.py`, `metrics.py`, `reporter.py`).
+- **Strategy Tuning**: Maintained aggressive yet robust configuration focusing on EMA + Volume Filter combo.
+- **Documentation**: Incremented version to 2.0.0 framework-wide.
+
 ## [1.16.1] - 2026-03-18
 ### Added
 - **PnL Milestone**: Achieved **+756% PnL** in a 2-year backtest for BTC/USDT 15m using the EMA + Volume Filter combo.

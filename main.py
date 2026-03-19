@@ -1,4 +1,4 @@
-# Binance Trading Bot - v1.16.0 (Production Stable Release 2026)
+# Binance Trading Bot - v2.0.0 (Production Stable Release 2026)
 import time
 from datetime import datetime, timezone, timedelta
 
