@@ -4,12 +4,9 @@ from dataclasses import dataclass
 
 # ==========================================
 # BINANCE TRADING BOT CONFIGURATION
-# Version: 1.16.1 (Optimized EMA Release)
-# Date: 2026-03-18
-# Strategy: EMA Filter + Volume Confirmed SuperTrend
+# Strategy: SuperTrend + EMA Filter + Volume
 # ==========================================
 
-# Load .env from project root or resource directory
 env_path = os.path.join(os.path.dirname(__file__), '.env')
 if not os.path.exists(env_path):
     env_path = os.path.join(os.path.dirname(__file__), 'resource', '.env')
@@ -26,48 +23,29 @@ class TradingConfig:
     # Strategy Settings
     SYMBOL: str = "BTC/USDT"
     TIMEFRAME: str = "15m"
-    
+
     # Strategy Parameters
-    ROI_TP = 77.5                # Take Profit target in % ROI (from optimization)
     SUPERTREND_LENGTH: int = 18
     SUPERTREND_FACTOR: float = 1.45
     EMA_LENGTH: int = 97
-    
+
     # Risk Management
     LEVERAGE: int = 10
     POSITION_SIZE_PERCENT: float = 0.2
-    
-    # Fee Rate (Taker - Binance Futures)
-    TAKER_FEE_RATE: float = 0.00045
+
+    # ATR Stop Loss
+    ATR_LENGTH: int = 14
+    ATR_MULTIPLIER: float = 0.74
+
+    # Fee Rate (Taker - Binance Futures, no BNB discount)
+    TAKER_FEE_RATE: float = 0.0005
 
     # Safety
     MAX_TRADES_PER_HOUR: int = 5
-    
-    # Filters
-    ADX_LENGTH: int = 14
-    ADX_THRESHOLD: int = 18
-    ATR_LENGTH: int = 14
-    ATR_MULTIPLIER: float = 0.74
-    
-    # Momentum (RSI)
-    RSI_LENGTH: int = 14
-    RSI_OVERBOUGHT: int = 64
-    RSI_OVERSOLD: int = 36
-    RSI_LONG_THRESHOLD: int = 53
-    
+
     # Volume
     VOLUME_MA_LENGTH: int = 177
-    
-    # Rule 2: EMA Slope
-    EMA_SLOPE_EMA_LENGTH: int = 200
-    EMA_SLOPE_LOOKBACK: int = 20
-    EMA_SLOPE_THRESHOLD: float = 0.002
-    REDUCED_POSITION_SIZE_PERCENT: float = 0.15
-    
-    # Rule 3: RSI Divergence
-    RSI_DIV_LOOKBACK: int = 14
-    RSI_DIV_MIN_RSI: int = 78
-    RSI_DIV_PARTIAL_CLOSE_PCT: float = 0.1
+
 
 # Instantiate global settings
 settings = TradingConfig()
@@ -84,21 +62,8 @@ SUPERTREND_FACTOR = settings.SUPERTREND_FACTOR
 EMA_LENGTH = settings.EMA_LENGTH
 LEVERAGE = settings.LEVERAGE
 POSITION_SIZE_PERCENT = settings.POSITION_SIZE_PERCENT
-MAX_TRADES_PER_HOUR = settings.MAX_TRADES_PER_HOUR
-ADX_LENGTH = settings.ADX_LENGTH
-ADX_THRESHOLD = settings.ADX_THRESHOLD
 ATR_LENGTH = settings.ATR_LENGTH
 ATR_MULTIPLIER = settings.ATR_MULTIPLIER
-RSI_LENGTH = settings.RSI_LENGTH
-RSI_OVERBOUGHT = settings.RSI_OVERBOUGHT
-RSI_OVERSOLD = settings.RSI_OVERSOLD
-RSI_LONG_THRESHOLD = settings.RSI_LONG_THRESHOLD
+MAX_TRADES_PER_HOUR = settings.MAX_TRADES_PER_HOUR
 VOLUME_MA_LENGTH = settings.VOLUME_MA_LENGTH
-EMA_SLOPE_EMA_LENGTH = settings.EMA_SLOPE_EMA_LENGTH
-EMA_SLOPE_LOOKBACK = settings.EMA_SLOPE_LOOKBACK
-EMA_SLOPE_THRESHOLD = settings.EMA_SLOPE_THRESHOLD
-REDUCED_POSITION_SIZE_PERCENT = settings.REDUCED_POSITION_SIZE_PERCENT
-RSI_DIV_LOOKBACK = settings.RSI_DIV_LOOKBACK
-RSI_DIV_MIN_RSI = settings.RSI_DIV_MIN_RSI
-RSI_DIV_PARTIAL_CLOSE_PCT = settings.RSI_DIV_PARTIAL_CLOSE_PCT
 TAKER_FEE_RATE = settings.TAKER_FEE_RATE
