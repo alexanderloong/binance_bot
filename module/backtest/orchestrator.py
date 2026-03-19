@@ -69,6 +69,34 @@ def simulate(
     return sim.run(df)
 
 
+def apply_htf_filter(
+    df_final,
+    df,
+    htf_timeframe=HTF_TIMEFRAME,
+    st_length=SUPERTREND_LENGTH,
+    st_factor=SUPERTREND_FACTOR,
+):
+    print(f"Computing HTF ({htf_timeframe}) SuperTrend...")
+    df_htf_raw = DataProcessor.resample_to_htf(df, htf=htf_timeframe)
+    df_htf_ha = DataProcessor.calculate_heikin_ashi(df_htf_raw)
+    df_htf_st = DataProcessor.calculate_supertrend(df_htf_ha)
+    st_dir_col = f"SUPERTd_{st_length}_{st_factor}"
+    df_htf_trend = df_htf_st[["timestamp", st_dir_col]].rename(
+        columns={st_dir_col: "HTF_TREND"}
+    )
+    # Merge into 15m df: each 15m candle gets the HTF trend of the last completed HTF candle
+    df_final = pd.merge_asof(
+        df_final.sort_values("timestamp"),
+        df_htf_trend.sort_values("timestamp"),
+        on="timestamp",
+        direction="backward",
+    )
+    print(
+        f"  HTF trend column added. Uptrend: {(df_final['HTF_TREND'] == 1).sum()}, Downtrend: {(df_final['HTF_TREND'] == -1).sum()} candles"
+    )
+    return df_final
+
+
 def run_backtest():
     print(f"--- Backtest for {SYMBOL} ({TIMEFRAME}) ---")
     print(
@@ -90,25 +118,7 @@ def run_backtest():
     df_final = df_st
 
     # HTF Filter: resample to higher timeframe and compute SuperTrend
-    if USE_HTF_FILTER:
-        print(f"Computing HTF ({HTF_TIMEFRAME}) SuperTrend...")
-        df_htf_raw = DataProcessor.resample_to_htf(df, htf=HTF_TIMEFRAME)
-        df_htf_ha = DataProcessor.calculate_heikin_ashi(df_htf_raw)
-        df_htf_st = DataProcessor.calculate_supertrend(df_htf_ha)
-        st_dir_col = f"SUPERTd_{SUPERTREND_LENGTH}_{SUPERTREND_FACTOR}"
-        df_htf_trend = df_htf_st[["timestamp", st_dir_col]].rename(
-            columns={st_dir_col: "HTF_TREND"}
-        )
-        # Merge into 15m df: each 15m candle gets the HTF trend of the last completed HTF candle
-        df_final = pd.merge_asof(
-            df_final.sort_values("timestamp"),
-            df_htf_trend.sort_values("timestamp"),
-            on="timestamp",
-            direction="backward",
-        )
-        print(
-            f"  HTF trend column added. Uptrend: {(df_final['HTF_TREND'] == 1).sum()}, Downtrend: {(df_final['HTF_TREND'] == -1).sum()} candles"
-        )
+    df_final = apply_htf_filter(df_final, df)
 
     # Run simulation
     res, trades = simulate(
