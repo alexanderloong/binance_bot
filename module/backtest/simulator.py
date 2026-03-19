@@ -17,7 +17,8 @@ class Simulator:
         leverage=10,
         position_size_percent=0.2,
         commission_rate=0.0005,
-        ema_length=97
+        ema_length=97,
+        use_htf_filter=False,
     ):
         self.timeframe = timeframe
         self.use_ema_filter = use_ema_filter
@@ -30,6 +31,7 @@ class Simulator:
         self.position_size_percent = position_size_percent
         self.commission_rate = commission_rate
         self.ema_length = ema_length
+        self.use_htf_filter = use_htf_filter
 
     def run(self, df):
         initial_balance = 1000
@@ -122,15 +124,23 @@ class Simulator:
             is_uptrend = price > ema_val if self.use_ema_filter else True
             is_downtrend = price < ema_val if self.use_ema_filter else True
 
+            # Higher Timeframe filter: only trade in direction of 1h trend
+            htf_long_ok = True
+            htf_short_ok = True
+            if self.use_htf_filter and "HTF_TREND" in current_candle.index:
+                htf_trend = current_candle["HTF_TREND"]
+                htf_long_ok = htf_trend == 1
+                htf_short_ok = htf_trend == -1
+
             vol_ma_col = f"VOL_MA_{self.volume_ma_length}"
             vol_ok = True
             if self.use_volume_filter and vol_ma_col in current_candle:
                 vol_ok = current_candle["volume"] > current_candle[vol_ma_col]
 
             signal = None
-            if curr_trend == 1 and prev_trend == -1 and is_uptrend and vol_ok:
+            if curr_trend == 1 and prev_trend == -1 and is_uptrend and vol_ok and htf_long_ok:
                 signal = "LONG"
-            elif curr_trend == -1 and prev_trend == 1 and is_downtrend and vol_ok:
+            elif curr_trend == -1 and prev_trend == 1 and is_downtrend and vol_ok and htf_short_ok:
                 signal = "SHORT"
 
             if signal and position_amt == 0:

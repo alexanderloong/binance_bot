@@ -119,6 +119,47 @@ class DataProcessor:
         return df
 
     @staticmethod
+    def resample_to_htf(df: pd.DataFrame, htf: str) -> pd.DataFrame:
+        """
+        Resample base timeframe OHLCV dataframe to a higher timeframe.
+
+        Args:
+            df: Base timeframe df with 'timestamp' column (timezone-aware).
+            htf: Target timeframe string, e.g. '1h', '4h', '1d'.
+
+        Returns:
+            Resampled DataFrame with OHLCV columns and DatetimeIndex.
+        """
+        # Map timeframe string to pandas offset alias
+        alias_map = {
+            "1m": "1min", "3m": "3min", "5m": "5min", "15m": "15min",
+            "30m": "30min", "1h": "1h", "2h": "2h", "4h": "4h",
+            "6h": "6h", "8h": "8h", "12h": "12h", "1d": "1D", "1w": "1W",
+        }
+        offset = alias_map.get(htf, htf)
+
+        df_indexed = df.set_index("timestamp")
+        df_htf = df_indexed["close"].resample(offset).agg({
+            "open": "first",
+            "high": "max",
+            "low": "min",
+            "close": "last",
+            "volume": "sum",
+        }).dropna()
+
+        # Need to resample all OHLCV columns properly
+        df_htf = df_indexed.resample(offset).agg(
+            open=("open", "first"),
+            high=("high", "max"),
+            low=("low", "min"),
+            close=("close", "last"),
+            volume=("volume", "sum"),
+        ).dropna()
+
+        df_htf = df_htf.reset_index().rename(columns={"timestamp": "timestamp"})
+        return df_htf
+
+    @staticmethod
     def calculate_supertrend(df: pd.DataFrame, length: int = settings.SUPERTREND_LENGTH, multiplier: float = settings.SUPERTREND_FACTOR) -> pd.DataFrame:
         """
         Calculates SuperTrend indicator.

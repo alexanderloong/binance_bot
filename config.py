@@ -7,10 +7,11 @@ from dataclasses import dataclass
 # Strategy: SuperTrend + EMA Filter + Volume
 # ==========================================
 
-env_path = os.path.join(os.path.dirname(__file__), '.env')
+env_path = os.path.join(os.path.dirname(__file__), ".env")
 if not os.path.exists(env_path):
-    env_path = os.path.join(os.path.dirname(__file__), 'resource', '.env')
+    env_path = os.path.join(os.path.dirname(__file__), "resource", ".env")
 load_dotenv(env_path)
+
 
 @dataclass(frozen=True)
 class TradingConfig:
@@ -23,6 +24,7 @@ class TradingConfig:
     # Strategy Settings
     SYMBOL: str = "BTC/USDT"
     TIMEFRAME: str = "15m"
+    HTF_TIMEFRAME: str = "4h"
 
     # Strategy Parameters
     SUPERTREND_LENGTH: int = 18
@@ -30,8 +32,8 @@ class TradingConfig:
     EMA_LENGTH: int = 97
 
     # Risk Management
-    LEVERAGE: int = 10
-    POSITION_SIZE_PERCENT: float = 0.2
+    LEVERAGE: int = 1
+    POSITION_SIZE_PERCENT: float = 1
 
     # ATR Stop Loss
     ATR_LENGTH: int = 14
@@ -57,6 +59,7 @@ USE_TESTNET = settings.USE_TESTNET
 LARK_WEBHOOK_URL = settings.LARK_WEBHOOK_URL
 SYMBOL = settings.SYMBOL
 TIMEFRAME = settings.TIMEFRAME
+HTF_TIMEFRAME = settings.HTF_TIMEFRAME
 SUPERTREND_LENGTH = settings.SUPERTREND_LENGTH
 SUPERTREND_FACTOR = settings.SUPERTREND_FACTOR
 EMA_LENGTH = settings.EMA_LENGTH
