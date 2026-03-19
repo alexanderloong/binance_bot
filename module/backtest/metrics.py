@@ -12,7 +12,7 @@ class MetricsCalculator:
             if "OPEN" in t["type"]:
                 current_trade_pnl = t["pnl"]  # Entry fee
                 is_open = True
-            elif any(x in t["type"] for x in ["CLOSE", "FINAL_CLOSE", "LIQUIDATION", "STOP_LOSS"]):
+            elif any(x in t["type"] for x in ["CLOSE", "FINAL_CLOSE", "LIQUIDATION", "STOP_LOSS", "BE_STOP"]):
                 current_trade_pnl += t["pnl"]
                 if is_open:
                     trade_cycles.append(current_trade_pnl)

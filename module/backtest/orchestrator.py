@@ -21,13 +21,14 @@ from config import (
     ATR_LENGTH,
     ATR_MULTIPLIER,
     TAKER_FEE_RATE,
+    BREAKEVEN_MULTIPLIER,
 )
 
 from module.backtest.data_loader import BacktestDataLoader
 from module.backtest.simulator import Simulator
 from module.backtest.reporter import BacktestReporter
 
-LIMIT = 228000
+LIMIT = 150000
 WORKERS = 5
 SLEEP = 1.5
 GEN_CHART = True
@@ -45,6 +46,8 @@ def simulate(
     use_ema_filter=True,
     use_volume_filter=True,
     use_htf_filter=True,
+    use_breakeven=True,
+    breakeven_multiplier=BREAKEVEN_MULTIPLIER,
     st_length=SUPERTREND_LENGTH,
     st_factor=SUPERTREND_FACTOR,
     volume_ma_length=VOLUME_MA_LENGTH,
@@ -65,6 +68,8 @@ def simulate(
         commission_rate=TAKER_FEE_RATE,
         ema_length=EMA_LENGTH,
         use_htf_filter=use_htf_filter,
+        use_breakeven=use_breakeven,
+        breakeven_multiplier=breakeven_multiplier,
     )
     return sim.run(df)
 

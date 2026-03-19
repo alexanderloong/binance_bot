@@ -19,6 +19,8 @@ class Simulator:
         commission_rate=0.0005,
         ema_length=97,
         use_htf_filter=False,
+        use_breakeven=False,
+        breakeven_multiplier=1.0,
     ):
         self.timeframe = timeframe
         self.use_ema_filter = use_ema_filter
@@ -32,6 +34,8 @@ class Simulator:
         self.commission_rate = commission_rate
         self.ema_length = ema_length
         self.use_htf_filter = use_htf_filter
+        self.use_breakeven = use_breakeven
+        self.breakeven_multiplier = breakeven_multiplier
 
     def run(self, df):
         initial_balance = 1000
@@ -40,6 +44,8 @@ class Simulator:
         entry_price = 0
         liquidation_price = 0
         stop_loss_price = 0
+        breakeven_target = 0
+        is_breakeven_activated = False
         trades = []
 
         st_dir_col = f"SUPERTd_{self.st_length}_{self.st_factor}"
@@ -87,6 +93,15 @@ class Simulator:
                     position_amt = 0
                     continue
 
+            # 0.5 BREAKEVEN TRIGGER
+            if self.use_breakeven and position_amt != 0 and not is_breakeven_activated:
+                if position_amt > 0 and price >= breakeven_target:
+                    stop_loss_price = entry_price * (1 + self.commission_rate * 2)
+                    is_breakeven_activated = True
+                elif position_amt < 0 and price <= breakeven_target:
+                    stop_loss_price = entry_price * (1 - self.commission_rate * 2)
+                    is_breakeven_activated = True
+
             # 1. EXIT LOGIC
             if position_amt > 0 and curr_trend == -1:
                 raw_pnl = (price - entry_price) * position_amt
@@ -110,14 +125,16 @@ class Simulator:
                 fee = (stop_loss_price * abs(position_amt)) * self.commission_rate
                 pnl = raw_pnl - fee
                 balance += pnl
-                trades.append({"time": execution_time, "type": "STOP_LOSS_LONG", "price": stop_loss_price, "pnl": pnl})
+                type_str = "BE_STOP_LONG" if is_breakeven_activated else "STOP_LOSS_LONG"
+                trades.append({"time": execution_time, "type": type_str, "price": stop_loss_price, "pnl": pnl})
                 position_amt = 0
             elif position_amt < 0 and price >= stop_loss_price:
                 raw_pnl = (entry_price - stop_loss_price) * abs(position_amt)
                 fee = (stop_loss_price * abs(position_amt)) * self.commission_rate
                 pnl = raw_pnl - fee
                 balance += pnl
-                trades.append({"time": execution_time, "type": "STOP_LOSS_SHORT", "price": stop_loss_price, "pnl": pnl})
+                type_str = "BE_STOP_SHORT" if is_breakeven_activated else "STOP_LOSS_SHORT"
+                trades.append({"time": execution_time, "type": type_str, "price": stop_loss_price, "pnl": pnl})
                 position_amt = 0
 
             # 2. ENTRY LOGIC
@@ -160,8 +177,12 @@ class Simulator:
                 atr_val = current_candle["ATR"]
                 if signal == "LONG":
                     stop_loss_price = entry_price - (atr_val * self.sl_multiplier)
+                    breakeven_target = entry_price + (entry_price - stop_loss_price) * self.breakeven_multiplier
                 else:
                     stop_loss_price = entry_price + (atr_val * self.sl_multiplier)
+                    breakeven_target = entry_price - (stop_loss_price - entry_price) * self.breakeven_multiplier
+                    
+                is_breakeven_activated = False
 
                 trades.append({
                     "time": execution_time,
