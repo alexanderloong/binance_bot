@@ -1,5 +1,8 @@
 import os
 import time
+import sys
+# Add project root to sys.path
+sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 from module.bot.data_processor import DataProcessor
 from config import (
     SYMBOL,
