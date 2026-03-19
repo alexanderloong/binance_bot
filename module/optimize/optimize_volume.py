@@ -10,7 +10,9 @@ def run_simulation(vol_len, df_final):
     df_wk = df_final.copy()
     df_wk = DataProcessor.calculate_volume_ma(df_wk, length=vol_len)
 
-    res, _ = simulate(df_wk, use_ema_filter=True, use_volume_filter=True, volume_ma_length=vol_len)
+    res, _ = simulate(
+        df_wk, use_ema_filter=True, use_volume_filter=True, volume_ma_length=vol_len
+    )
 
     return {
         "vol_ma_len": vol_len,
@@ -26,12 +28,14 @@ def run_simulation(vol_len, df_final):
 def run_optimization():
     optimizer = BaseOptimizer("Volume MA Length Optimization")
 
-    print(f"Fixed: SuperTrend {SUPERTREND_LENGTH}/{SUPERTREND_FACTOR}, EMA {EMA_LENGTH}")
+    print(
+        f"Fixed: SuperTrend {SUPERTREND_LENGTH}/{SUPERTREND_FACTOR}, EMA {EMA_LENGTH}"
+    )
 
     if not optimizer.load_and_prepare_data():
         return
 
-    vol_lengths = np.arange(50, 300, 1)
+    vol_lengths = np.arange(150, 180, 1)
     print(f"Testing {len(vol_lengths)} Volume MA lengths...")
 
     tasks = [(vol_len,) for vol_len in vol_lengths]
@@ -43,12 +47,24 @@ def run_optimization():
 
         if not valid_mdd.empty:
             print("\n🌟 BEST BY PNL (MDD < 40%):")
-            print(valid_mdd.sort_values(by="pnl_pct", ascending=False).head(5).to_string(index=False))
+            print(
+                valid_mdd.sort_values(by="pnl_pct", ascending=False)
+                .head(5)
+                .to_string(index=False)
+            )
             print("\n🏆 BEST BY CALMAR:")
-            print(valid_mdd.sort_values(by="calmar", ascending=False).head(5).to_string(index=False))
+            print(
+                valid_mdd.sort_values(by="calmar", ascending=False)
+                .head(5)
+                .to_string(index=False)
+            )
         else:
             print("\n⚠️ No configuration found with MDD < 40%. Best available:")
-            print(opt_df.sort_values(by="pnl_pct", ascending=False).head(5).to_string(index=False))
+            print(
+                opt_df.sort_values(by="pnl_pct", ascending=False)
+                .head(5)
+                .to_string(index=False)
+            )
 
 
 if __name__ == "__main__":

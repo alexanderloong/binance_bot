@@ -47,7 +47,7 @@ class TradingConfig:
     MAX_TRADES_PER_HOUR: int = 5
 
     # Volume
-    VOLUME_MA_LENGTH: int = 177
+    VOLUME_MA_LENGTH: int = 166
 
 
 # Instantiate global settings
