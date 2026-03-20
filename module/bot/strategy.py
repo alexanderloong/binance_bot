@@ -120,31 +120,7 @@ class Strategy:
             self.stop_loss_price = None
             return
 
-        # Check for ROI Take Profit
-        if settings.ROI_TP > 0:
-            roi = 0
-            if current_pos_amt > 0:
-                roi = (current_price - entry_price) / entry_price * settings.LEVERAGE
-            else:
-                roi = (entry_price - current_price) / entry_price * settings.LEVERAGE
-            
-            if (roi * 100) >= settings.ROI_TP:
-                self.logger.info(f"ROI TAKE PROFIT TARGET REACHED: {roi*100:.2f}% (Target: {settings.ROI_TP}%). Closing position.")
-                if self.notifier:
-                    est_fee = (entry_price + current_price) * abs(current_pos_amt) * settings.TAKER_FEE_RATE
-                    raw_pnl = roi * entry_price * abs(current_pos_amt) / settings.LEVERAGE # approximate
-                    pnl = raw_pnl - est_fee
-                    self.notifier.send_lark_message(
-                        f"💰 **ROI TAKE PROFIT TARGET REACHED**\n"
-                        f"Current Price: {current_price:.2f}\n"
-                        f"Entry Price: {entry_price:.2f}\n"
-                        f"Current ROI: {roi*100:.2f}%\n"
-                        f"PNL: {pnl:.2f} USDT\n"
-                        f"Target: {settings.ROI_TP}%\n"
-                        f"Closing position."
-                    )
-                self.close_all_positions()
-                self.stop_loss_price = None
+
 
     def _check_new_candle(self, df: pd.DataFrame) -> Optional[float]:
         """
@@ -220,10 +196,7 @@ class Strategy:
 
         self.logger.info(f"Market Data: {candle_time} | Close: {close_price} | Trend: {current_trend} | EMA{settings.EMA_LENGTH}: {ema_val:.2f} | ADX: {adx_val:.2f} | ATR: {atr_val:.2f} | RSI: {rsi_val:.2f} | Vol: {current_volume:.0f} (MA: {vol_ma_val:.0f}) | EMA{settings.EMA_SLOPE_EMA_LENGTH} Slope: {ema_slope_pct*100:.3f}% ({'FLAT' if is_flat_slope else 'STEEP'})")
 
-        # --- BEARISH DIVERGENCE CHECK (Rule 3) ---
-        bearish_div = DataProcessor.check_bearish_divergence(df_final, lookback=settings.RSI_DIV_LOOKBACK, min_rsi=settings.RSI_DIV_MIN_RSI)
-        if bearish_div:
-            self.logger.info(f"⚠️ BEARISH DIVERGENCE DETECTED (RSI Peaks in last {settings.RSI_DIV_LOOKBACK} candles)!")
+
 
         # --- STALENESS CHECK (Only skip TRADE logic, not analysis logging) ---
         STALE_TOLERANCE = 120 
@@ -253,29 +226,12 @@ class Strategy:
              self.logger.info(f"Trend flipped to GREEN. Closing SHORT position ({current_pos_amt}).")
              self.close_all_positions()
         
-        # 1b. RSI DIVERGENCE - PARTIAL CLOSE & BE
-        elif current_pos_amt > 0 and bearish_div:
-             # If SL is below entry, we are not at BE.
-             is_sl_at_be = self.stop_loss_price is not None and self.stop_loss_price >= entry_price
-             
-             if not is_sl_at_be:
-                 self.logger.info(f"Bearish Divergence on Long. Action: Close {settings.RSI_DIV_PARTIAL_CLOSE_PCT*100}% & Move SL to BE.")
-                 
-                 # 1. Partial Close
-                 close_amt = abs(current_pos_amt) * settings.RSI_DIV_PARTIAL_CLOSE_PCT
-                 self.partial_close_position(close_amt, 'sell')
-                 
-                 # 2. Move SL to Break Even (plus small buffer?)
-                 self.stop_loss_price = entry_price * 1.001 # 0.1% buffer
-                 self.logger.info(f"Moved Software SL to Break Even: {self.stop_loss_price}")
+
 
         # 2. LOGIC MỞ LỆNH (Entry Filtered)
         signal: Optional[str] = None
         if current_trend == 1 and previous_trend == -1 and is_uptrend_long:
-            if bearish_div:
-                self.logger.info("LONG signal detected but BLOCKED by Bearish Divergence.")
-                signal = None
-            elif is_trending and rsi_long_ok and vol_ok:
+            if is_trending and rsi_long_ok and vol_ok:
                 signal = 'LONG'
             else:
                 reasons = []
