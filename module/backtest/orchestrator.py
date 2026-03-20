@@ -28,7 +28,7 @@ from module.backtest.data_loader import BacktestDataLoader
 from module.backtest.simulator import Simulator
 from module.backtest.reporter import BacktestReporter
 
-LIMIT = 70000
+LIMIT = 228000
 WORKERS = 5
 SLEEP = 1.5
 GEN_CHART = True
@@ -42,7 +42,7 @@ def get_backtest_data(limit=LIMIT):
 
 
 def simulate(
-    df,
+    df_final,
     use_ema_filter=True,
     use_volume_filter=True,
     use_htf_filter=True,
@@ -71,7 +71,8 @@ def simulate(
         use_breakeven=use_breakeven,
         breakeven_multiplier=breakeven_multiplier,
     )
-    return sim.run(df)
+    # FIX [2][3]: pass df_final (HA-processed, has ATR on HA candles) — not raw df
+    return sim.run(df_final)
 
 
 def apply_htf_filter(
@@ -81,24 +82,48 @@ def apply_htf_filter(
     st_length=SUPERTREND_LENGTH,
     st_factor=SUPERTREND_FACTOR,
 ):
+    """
+    Merges HTF SuperTrend trend direction into df_final.
+
+    FIX [1]: use merge_asof with direction='backward' on the SHIFTED timestamp
+    so that each LTF candle gets the trend of the LAST *COMPLETED* HTF candle
+    (same as live bot which uses df_htf_st.iloc[-2]).
+    Shifting by 1 period ensures we never use the still-forming HTF candle.
+    """
     print(f"Computing HTF ({htf_timeframe}) SuperTrend...")
     df_htf_raw = DataProcessor.resample_to_htf(df, htf=htf_timeframe)
     df_htf_ha = DataProcessor.calculate_heikin_ashi(df_htf_raw)
     df_htf_st = DataProcessor.calculate_supertrend(df_htf_ha)
     st_dir_col = f"SUPERTd_{st_length}_{st_factor}"
-    df_htf_trend = df_htf_st[["timestamp", st_dir_col]].rename(
-        columns={st_dir_col: "HTF_TREND"}
+
+    df_htf_trend = df_htf_st[["timestamp", st_dir_col]].copy()
+    df_htf_trend = df_htf_trend.rename(columns={st_dir_col: "HTF_TREND"})
+
+    # Shift timestamp forward by 1 HTF period so the trend value of a completed
+    # HTF candle only becomes visible to LTF candles that open AFTER that candle closes.
+    # This matches live bot behaviour where iloc[-2] is the last closed HTF candle.
+    from module.bot.utils import parse_timeframe_to_seconds
+
+    htf_seconds = parse_timeframe_to_seconds(htf_timeframe)
+    df_htf_trend["timestamp"] = df_htf_trend["timestamp"] + pd.Timedelta(
+        seconds=htf_seconds
     )
-    # Merge into 15m df: each 15m candle gets the HTF trend of the last completed HTF candle
+
+    # FIX: normalize both sides to same datetime unit (ms) before merging
+    # merge_asof errors when left is datetime64[ms, tz] and right is datetime64[us, tz]
+    df_final = df_final.copy()
+    df_final["timestamp"] = df_final["timestamp"].dt.as_unit("ms")
+    df_htf_trend["timestamp"] = df_htf_trend["timestamp"].dt.as_unit("ms")
+
     df_final = pd.merge_asof(
         df_final.sort_values("timestamp"),
         df_htf_trend.sort_values("timestamp"),
         on="timestamp",
         direction="backward",
     )
-    print(
-        f"  HTF trend column added. Uptrend: {(df_final['HTF_TREND'] == 1).sum()}, Downtrend: {(df_final['HTF_TREND'] == -1).sum()} candles"
-    )
+    up = (df_final["HTF_TREND"] == 1).sum()
+    down = (df_final["HTF_TREND"] == -1).sum()
+    print(f"  HTF trend added — Uptrend: {up}, Downtrend: {down} candles")
     return df_final
 
 
