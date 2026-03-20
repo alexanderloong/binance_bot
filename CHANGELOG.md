@@ -1,3 +1,31 @@
+## [2.1.0] - 2026-03-21
+### Fixed
+- **Financial Calculations**: Extracted all PnL, fee, ROI, and position-sizing math into a dedicated `module/bot/finance.py` module — single source of truth across live bot and backtest engine.
+- **Breakeven Price**: Replaced first-order approximation (`entry × (1 ± fee×2)`) with the exact algebraic formula (`entry × (1 ± rate) / (1 ∓ rate)`), eliminating systematic breakeven mispricing.
+- **Position Sizing**: `open_position()` now reserves margin for the entry taker fee (`notional / (1 + fee_rate)`) to prevent insufficient-margin rejections at high position sizes.
+- **ROI Calculation**: Live bot notifications now report **net ROI on margin deployed** (`net_pnl / margin × 100`) instead of gross price-move ROI, making PnL and ROI figures consistent.
+- **`get_yesterday_stats` Timezone**: Fixed naive `datetime.now()` → explicit `VN_TZ (UTC+7)` so daily report boundaries are always correct regardless of server timezone.
+- **WebSocket Race Condition**: `_on_ws_message` buffer writes and `fetch_ohlcv` buffer reads are now both protected by `_ws_lock`, eliminating potential partial-read of a DataFrame mid-update.
+- **`time.time` Monkey-Patch Removed**: Global override of `time.time` replaced with an explicit `synced_time()` helper — third-party libraries (websocket, requests) no longer receive a patched clock.
+- **`resample_to_htf` Double Computation**: Removed redundant first resample pass that was immediately overwritten.
+
+### Fixed (Backtest)
+- **Liquidation PnL**: Now computed as `raw_move_to_liq_price − exit_fee` instead of `−margin`, accurately reflecting the fee charged at forced close.
+- **Breakeven in Simulator**: Aligned with live bot — uses `calc_breakeven_price()` from `finance.py`.
+- **CAGR Guard**: Prevented `math domain error` when `final_balance ≤ 0` (total wipeout scenario).
+- **Monthly Breakdown Timezone Warning**: Fixed `UserWarning` on timezone-aware → Period conversion by using `.dt.tz_convert(None)` before `.to_period()`.
+
+### Added (Backtest)
+- **Sharpe Ratio**: Annualised Sharpe added to `MetricsCalculator` and displayed in report summary.
+- **Avg Win / Avg Loss / Expectancy**: Three new metrics surfaced in backtest report.
+- **Coloured Monthly Table**: `breakdown.py` now renders ANSI-coloured output — green for positive months, red for negative, grey for missing data.
+
+### Changed
+- `close_all_positions()` in `Strategy` now correctly sends the full `TradeResult` notification (PnL + ROI) before closing — previously `pnl_str` was computed but never sent.
+- `open_position()` notification now includes the exact **breakeven price** so traders know their true cost basis immediately on entry.
+
+---
+
 ## [2.0.0] - 2026-03-19
 ### Changed
 - **Project Structure**: Fully restructured codebase according to SOLID principles.
@@ -67,7 +95,6 @@
 ### Added
 - **Performance Visualization:** Integrated `matplotlib` and `seaborn` for generating equity curve and drawdown charts.
 - **Dependencies:** Updated `requirements.txt` with plotting libraries.
-
 ### Changed
 - **Strategy Tuning (Aggressive):** Shifted to an aggressive growth configuration.
 - **Code Optimization:** Refactored `backtest.py` and `optimize/plot_results.py`.
