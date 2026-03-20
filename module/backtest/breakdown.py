@@ -82,7 +82,7 @@ class BacktestBreakdown:
         lines = []
         lines.append("╔" + "═" * (divider_len + 2) + "╗")
         lines.append(
-            f"║  📅  MONTHLY & YEARLY RETURN BREAKDOWN  (% of Compounding Equity){'':>{divider_len - 63}}║"
+            f"║  📅  MONTHLY & YEARLY RETURN BREAKDOWN  (% of Compounding Equity){'':>{divider_len - 64}}║"
         )
         lines.append("╠" + "═" * (divider_len + 2) + "╣")
         lines.append(f"║ {header} ║")
