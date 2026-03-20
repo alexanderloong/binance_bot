@@ -1,9 +1,10 @@
 import pandas as pd
 from module.bot.utils import parse_timeframe_to_seconds
+from module.bot.core_strategy import evaluate_signal
 from module.backtest.metrics import MetricsCalculator
 
 class Simulator:
-    """Mô phỏng giao dịch Backtest."""
+    """Backtest simulator using the shared evaluate_signal engine."""
     
     def __init__(
         self,
@@ -48,19 +49,13 @@ class Simulator:
         is_breakeven_activated = False
         trades = []
 
-        st_dir_col = f"SUPERTd_{self.st_length}_{self.st_factor}"
-        ema_col = "EMA_FILTER" if "EMA_FILTER" in df.columns else f"EMA_{self.ema_length}"
+        for i in range(2, len(df)):
+            # Build a slice up to (and including) current candle for evaluate_signal
+            # evaluate_signal looks at df.iloc[-2] (last closed) and df.iloc[-3] (prev closed)
+            df_slice = df.iloc[:i + 1]
 
-        for i in range(1, len(df)):
-            current_candle = df.iloc[i]
-            prev_candle = df.iloc[i - 1]
-
-            curr_trend = current_candle[st_dir_col]
-            prev_trend = prev_candle[st_dir_col]
-            ema_val = current_candle[ema_col]
-
-            price = current_candle["close"]
-            timestamp = current_candle["timestamp"]
+            price = df.iloc[i]["close"]
+            timestamp = df.iloc[i]["timestamp"]
 
             if i < len(df) - 1:
                 execution_time = df.iloc[i + 1]["timestamp"]
@@ -70,26 +65,20 @@ class Simulator:
 
             # 0. LIQUIDATION CHECK
             if position_amt != 0:
+                current_candle = df.iloc[i]
                 liq_hit = False
-                if position_amt > 0:
-                    if current_candle["low"] <= liquidation_price:
-                        liq_hit = True
-                        liq_price_trigger = liquidation_price
-                else:
-                    if current_candle["high"] >= liquidation_price:
-                        liq_hit = True
-                        liq_price_trigger = liquidation_price
+                if position_amt > 0 and current_candle["low"] <= liquidation_price:
+                    liq_hit = True
+                    liq_price_trigger = liquidation_price
+                elif position_amt < 0 and current_candle["high"] >= liquidation_price:
+                    liq_hit = True
+                    liq_price_trigger = liquidation_price
 
                 if liq_hit:
                     margin_lost = (abs(position_amt) * entry_price) / self.leverage
                     pnl = -margin_lost
                     balance += pnl
-                    trades.append({
-                        "time": execution_time,
-                        "type": "LIQUIDATION",
-                        "price": liq_price_trigger,
-                        "pnl": pnl,
-                    })
+                    trades.append({"time": execution_time, "type": "LIQUIDATION", "price": liq_price_trigger, "pnl": pnl})
                     position_amt = 0
                     continue
 
@@ -102,24 +91,7 @@ class Simulator:
                     stop_loss_price = entry_price * (1 - self.commission_rate * 2)
                     is_breakeven_activated = True
 
-            # 1. EXIT LOGIC
-            if position_amt > 0 and curr_trend == -1:
-                raw_pnl = (price - entry_price) * position_amt
-                fee = (price * abs(position_amt)) * self.commission_rate
-                pnl = raw_pnl - fee
-                balance += pnl
-                trades.append({"time": execution_time, "type": "CLOSE_LONG", "price": price, "pnl": pnl})
-                position_amt = 0
-
-            elif position_amt < 0 and curr_trend == 1:
-                raw_pnl = (entry_price - price) * abs(position_amt)
-                fee = (price * abs(position_amt)) * self.commission_rate
-                pnl = raw_pnl - fee
-                balance += pnl
-                trades.append({"time": execution_time, "type": "CLOSE_SHORT", "price": price, "pnl": pnl})
-                position_amt = 0
-
-            # 1b. STOP LOSS CHECK
+            # 1. STOP LOSS CHECK (before exit signal, to catch intra-candle moves)
             if position_amt > 0 and price <= stop_loss_price:
                 raw_pnl = (stop_loss_price - entry_price) * position_amt
                 fee = (stop_loss_price * abs(position_amt)) * self.commission_rate
@@ -128,6 +100,7 @@ class Simulator:
                 type_str = "BE_STOP_LONG" if is_breakeven_activated else "STOP_LOSS_LONG"
                 trades.append({"time": execution_time, "type": type_str, "price": stop_loss_price, "pnl": pnl})
                 position_amt = 0
+                continue
             elif position_amt < 0 and price >= stop_loss_price:
                 raw_pnl = (entry_price - stop_loss_price) * abs(position_amt)
                 fee = (stop_loss_price * abs(position_amt)) * self.commission_rate
@@ -136,54 +109,51 @@ class Simulator:
                 type_str = "BE_STOP_SHORT" if is_breakeven_activated else "STOP_LOSS_SHORT"
                 trades.append({"time": execution_time, "type": type_str, "price": stop_loss_price, "pnl": pnl})
                 position_amt = 0
+                continue
 
-            # 2. ENTRY LOGIC
-            is_uptrend = price > ema_val if self.use_ema_filter else True
-            is_downtrend = price < ema_val if self.use_ema_filter else True
+            # 2. UNIFIED SIGNAL EVALUATION (same rules as live bot)
+            signal, suggested_pos_size, _ = evaluate_signal(df_slice, position_amt)
 
-            # Higher Timeframe filter: only trade in direction of 1h trend
-            htf_long_ok = True
-            htf_short_ok = True
-            if self.use_htf_filter and "HTF_TREND" in current_candle.index:
-                htf_trend = current_candle["HTF_TREND"]
-                htf_long_ok = htf_trend == 1
-                htf_short_ok = htf_trend == -1
+            # 3. EXIT LOGIC
+            if signal == 'CLOSE_LONG' and position_amt > 0:
+                raw_pnl = (price - entry_price) * position_amt
+                fee = (price * abs(position_amt)) * self.commission_rate
+                pnl = raw_pnl - fee
+                balance += pnl
+                trades.append({"time": execution_time, "type": "CLOSE_LONG", "price": price, "pnl": pnl})
+                position_amt = 0
 
-            vol_ma_col = f"VOL_MA_{self.volume_ma_length}"
-            vol_ok = True
-            if self.use_volume_filter and vol_ma_col in current_candle:
-                vol_ok = current_candle["volume"] > current_candle[vol_ma_col]
+            elif signal == 'CLOSE_SHORT' and position_amt < 0:
+                raw_pnl = (entry_price - price) * abs(position_amt)
+                fee = (price * abs(position_amt)) * self.commission_rate
+                pnl = raw_pnl - fee
+                balance += pnl
+                trades.append({"time": execution_time, "type": "CLOSE_SHORT", "price": price, "pnl": pnl})
+                position_amt = 0
 
-            signal = None
-            if curr_trend == 1 and prev_trend == -1 and is_uptrend and vol_ok and htf_long_ok:
-                signal = "LONG"
-            elif curr_trend == -1 and prev_trend == 1 and is_downtrend and vol_ok and htf_short_ok:
-                signal = "SHORT"
-
-            if signal and position_amt == 0:
-                trade_value = balance * self.position_size_percent * self.leverage
+            # 4. ENTRY LOGIC (only if flat/no position after exit)
+            elif signal in ('LONG', 'SHORT') and position_amt == 0:
+                # Apply dynamic position sizing (from EMA slope logic in evaluate_signal)
+                effective_size = suggested_pos_size if suggested_pos_size > 0 else self.position_size_percent
+                trade_value = balance * effective_size * self.leverage
                 entry_fee = trade_value * self.commission_rate
                 balance -= entry_fee
 
+                atr_val = df.iloc[i]["ATR"]
                 amount = trade_value / price
                 position_amt = amount if signal == "LONG" else -amount
                 entry_price = price
 
                 if signal == "LONG":
                     liquidation_price = entry_price * (1 - 1 / self.leverage)
-                else:
-                    liquidation_price = entry_price * (1 + 1 / self.leverage)
-
-                atr_val = current_candle["ATR"]
-                if signal == "LONG":
                     stop_loss_price = entry_price - (atr_val * self.sl_multiplier)
                     breakeven_target = entry_price + (entry_price - stop_loss_price) * self.breakeven_multiplier
                 else:
+                    liquidation_price = entry_price * (1 + 1 / self.leverage)
                     stop_loss_price = entry_price + (atr_val * self.sl_multiplier)
                     breakeven_target = entry_price - (stop_loss_price - entry_price) * self.breakeven_multiplier
-                    
-                is_breakeven_activated = False
 
+                is_breakeven_activated = False
                 trades.append({
                     "time": execution_time,
                     "type": f"OPEN_{signal}",
@@ -192,7 +162,7 @@ class Simulator:
                     "amount": amount,
                 })
 
-        # Close final position
+        # Close final open position at last price
         if position_amt != 0:
             last_price = df.iloc[-1]["close"]
             raw_pnl = (
@@ -212,3 +182,4 @@ class Simulator:
 
         metrics = MetricsCalculator.calculate(trades, balance, initial_balance)
         return metrics, trades
+

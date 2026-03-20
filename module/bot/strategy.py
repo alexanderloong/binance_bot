@@ -1,13 +1,16 @@
 import time
+import os
+import json
 from datetime import datetime, timedelta
 import logging
-from typing import Optional, Any
-import pandas as pd # Type hint requirement
+from typing import Optional, Any, List
+import pandas as pd
 
 from config import settings
 from module.bot.notifier import Notifier
 from .data_processor import DataProcessor
 from .utils import parse_timeframe_to_seconds
+from .core_strategy import evaluate_signal
 
 class Strategy:
     def __init__(self, exchange_client: Any, logger: Any, notifier: Optional[Notifier] = None):
@@ -19,8 +22,39 @@ class Strategy:
         self.trade_history: List[float] = [] # For rate limiting
         self.stop_loss_price: Optional[float] = None
         
+        self.entry_price: Optional[float] = None
+        self.breakeven_activated: bool = False
+        
         # Parse timeframe for stale candle checking
         self.tf_seconds: int = parse_timeframe_to_seconds(settings.TIMEFRAME)
+        self._load_state()
+
+    def _state_file(self) -> str:
+        return os.path.join(os.path.dirname(os.path.abspath(__file__)), "bot_state.json")
+
+    def _load_state(self):
+        try:
+            if os.path.exists(self._state_file()):
+                with open(self._state_file(), 'r') as f:
+                    data = json.load(f)
+                    self.stop_loss_price = data.get("stop_loss_price")
+                    self.entry_price = data.get("entry_price")
+                    self.breakeven_activated = data.get("breakeven_activated", False)
+                    self.logger.info(f"Loaded persistent state: SL={self.stop_loss_price}, Entry={self.entry_price}, BE={self.breakeven_activated}")
+        except Exception as e:
+            self.logger.error(f"Error loading state: {e}")
+
+    def _save_state(self):
+        try:
+            data = {
+                "stop_loss_price": self.stop_loss_price,
+                "entry_price": self.entry_price,
+                "breakeven_activated": self.breakeven_activated
+            }
+            with open(self._state_file(), 'w') as f:
+                json.dump(data, f)
+        except Exception as e:
+            self.logger.error(f"Error saving state: {e}")
 
     def check_rate_limit(self) -> bool:
         current_time = time.time()
@@ -42,43 +76,45 @@ class Strategy:
         if df is None or df.empty:
             self.logger.error("No data received from exchange.")
             return False
-        
-        # --- 1. POSITION MANAGEMENT (Every Poll) ---
-        current_pos_amt, entry_price = self.client.get_current_position()
-        
+            
+        current_pos_amt, entry_price_api = self.client.get_current_position()
+        if current_pos_amt == 0:
+            self.entry_price = None
+            self.stop_loss_price = None
+            self.breakeven_activated = False
+        elif self.entry_price is None:
+            self.entry_price = entry_price_api
+            
         if current_pos_amt != 0:
-             self._manage_open_position(df, current_pos_amt, entry_price)
-             # If position closed during management, update? 
-             # Ideally we return here if SL triggered to avoid entering same candle logic immediately
-             # But legacy logic allows continuation if safe. 
-             # Logic from old run_analysis: "return # Skip further analysis this cycle" if SL hit.
+             self._manage_open_position(df, current_pos_amt, self.entry_price)
              if self.stop_loss_price is None and current_pos_amt != 0: 
-                 # This implies SL was hit and cleared (and position closing initiated), 
-                 # OR it's a new position without SL (unlikely due to open_position logic).
-                 # To act exactly like before:
                  pass
 
-        # --- FIX: Prevent Multi-Entry and Flickering ---
         delay_seconds = self._check_new_candle(df)
         if delay_seconds is None:
             return False
 
-        # --- DATA PROCESSING ---
-        df_final = self._prepare_indicators(df)
+        df_final = DataProcessor.prepare_all_indicators(df)
         
-        # --- SIGNAL ANALYSIS ---
-        self._analyze_market_and_trade(df_final, current_pos_amt, entry_price, delay_seconds)
+        # HTF Data
+        df_htf = self.client.fetch_ohlcv(limit=100, timeframe=settings.HTF_TIMEFRAME)
+        if df_htf is not None and not df_htf.empty:
+            df_htf_ha = DataProcessor.calculate_heikin_ashi(df_htf)
+            df_htf_st = DataProcessor.calculate_supertrend(df_htf_ha)
+            st_col = f"SUPERTd_{settings.SUPERTREND_LENGTH}_{settings.SUPERTREND_FACTOR}"
+            htf_trend_val = df_htf_st[st_col].iloc[-2]
+            df_final.loc[df_final.index[-2], 'HTF_TREND'] = htf_trend_val
+            
+        self._analyze_market_and_trade(df_final, current_pos_amt, self.entry_price, delay_seconds)
         return True
 
     def _manage_open_position(self, df: pd.DataFrame, current_pos_amt: float, entry_price: float) -> None:
         """
-        Handles Stop Loss and basic position logic.
+        Handles Stop Loss, Breakeven, and basic position logic.
         """
-        current_price = df['close'].iloc[-1] # Current mark/last price
+        current_price = df['close'].iloc[-1]
         
-        # Reconstruct Stop Loss if missing (e.g. after bot restart)
         if self.stop_loss_price is None:
-            # Fetch ATR of the last closed candle
             df_ha = DataProcessor.calculate_heikin_ashi(df)
             atr_val = DataProcessor.calculate_atr(df_ha, settings.ATR_LENGTH).iloc[-2]
             
@@ -87,13 +123,31 @@ class Strategy:
             else:
                 self.stop_loss_price = entry_price + (atr_val * settings.ATR_MULTIPLIER)
             self.logger.info(f"Reconstructed SOFTWARE STOP LOSS at {self.stop_loss_price:.2f} (Entry: {entry_price:.2f})")
+            self._save_state()
 
-        # Check for Stop Loss hit
+        # Breakeven Check
+        if not self.breakeven_activated and entry_price is not None:
+            breakeven_multiplier = getattr(settings, 'BREAKEVEN_MULTIPLIER', 2.0)
+            if current_pos_amt > 0:
+                breakeven_target = entry_price + (entry_price - self.stop_loss_price) * breakeven_multiplier
+                if current_price >= breakeven_target:
+                    self.stop_loss_price = entry_price * (1 + settings.TAKER_FEE_RATE * 2)
+                    self.breakeven_activated = True
+                    self.logger.info(f"LONG BREAKEVEN HIT at {current_price}. SL moved to {self.stop_loss_price}")
+                    self._save_state()
+            else:
+                breakeven_target = entry_price - (self.stop_loss_price - entry_price) * breakeven_multiplier
+                if current_price <= breakeven_target:
+                    self.stop_loss_price = entry_price * (1 - settings.TAKER_FEE_RATE * 2)
+                    self.breakeven_activated = True
+                    self.logger.info(f"SHORT BREAKEVEN HIT at {current_price}. SL moved to {self.stop_loss_price}")
+                    self._save_state()
+
         is_sl_hit = (current_pos_amt > 0 and current_price <= self.stop_loss_price) or \
                     (current_pos_amt < 0 and current_price >= self.stop_loss_price)
         
         if is_sl_hit:
-            self.logger.warning(f"SOFTWARE STOP LOSS HIT at {current_price:.2f} (Target: {self.stop_loss_price:.2f}). Closing position.")
+            self.logger.warning(f"SOFTWARE STOP LOSS/BREAKEVEN HIT at {current_price:.2f} (Target: {self.stop_loss_price:.2f}). Closing position.")
             
             if self.notifier:
                 est_fee = (entry_price + current_price) * abs(current_pos_amt) * settings.TAKER_FEE_RATE
@@ -109,7 +163,7 @@ class Strategy:
                     roi = (entry_price - current_price) / entry_price * settings.LEVERAGE * 100
 
                 self.notifier.send_lark_message(
-                    f"⚠️ **SOFTWARE STOP LOSS HIT**\n"
+                    f"⚠️ **SL/BREAKEVEN HIT**\n"
                     f"Current Price: {current_price:.2f}\n"
                     f"Target SL: {self.stop_loss_price:.2f}\n"
                     f"PNL: {pnl:.2f} USDT\n"
@@ -118,6 +172,9 @@ class Strategy:
                 )
             self.close_all_positions()
             self.stop_loss_price = None
+            self.entry_price = None
+            self.breakeven_activated = False
+            self._save_state()
             return
 
 
@@ -156,112 +213,59 @@ class Strategy:
             self.logger.error(f"Error checking candle timestamp: {e}")
             return None
 
-    def _prepare_indicators(self, df: pd.DataFrame) -> pd.DataFrame:
-        df_ha = DataProcessor.calculate_heikin_ashi(df)
-        df_st = DataProcessor.calculate_supertrend(df_ha)
-        df_st[f'EMA_{settings.EMA_LENGTH}'] = DataProcessor.calculate_ema(df_st, length=settings.EMA_LENGTH)[f'EMA_{settings.EMA_LENGTH}']
-        df_st['ADX'] = DataProcessor.calculate_adx(df, length=settings.ADX_LENGTH)
-        df_st['ATR'] = DataProcessor.calculate_atr(df, length=settings.ATR_LENGTH)
-        df_st['RSI'] = DataProcessor.calculate_rsi(df, length=settings.RSI_LENGTH)
-        df_st = DataProcessor.calculate_volume_ma(df_st, length=settings.VOLUME_MA_LENGTH)
-        df_st[f'EMA_{settings.EMA_SLOPE_EMA_LENGTH}'] = DataProcessor.calculate_ema(df_st, length=settings.EMA_SLOPE_EMA_LENGTH)[f'EMA_{settings.EMA_SLOPE_EMA_LENGTH}']
-        return df_st
-
     def _analyze_market_and_trade(self, df_final: pd.DataFrame, current_pos_amt: float, entry_price: float, delay_seconds: float) -> None:
-        
-        # Get the last closed candle (second to last row, as last row is unfinished)
         last_candle = df_final.iloc[-2]
-        prev_candle = df_final.iloc[-3]
-        
-        # SuperTrend columns will be named like SUPERT_15_1.5
-        st_col = f"SUPERT_{settings.SUPERTREND_LENGTH}_{settings.SUPERTREND_FACTOR}"
-        st_dir_col = f"SUPERTd_{settings.SUPERTREND_LENGTH}_{settings.SUPERTREND_FACTOR}" # 1 for Buy, -1 for Sell
-        
-        current_trend = last_candle[st_dir_col]
-        previous_trend = prev_candle[st_dir_col]
-        
-        close_price = last_candle['close']
-        ema_val = last_candle[f'EMA_{settings.EMA_LENGTH}']
-        adx_val = last_candle['ADX']
-        atr_val = last_candle['ATR']
-        rsi_val = last_candle['RSI']
-        vol_ma_val = last_candle[f'VOL_MA_{settings.VOLUME_MA_LENGTH}']
-        current_volume = last_candle['volume']
         candle_time = last_candle['timestamp'].strftime('%d-%m-%Y %H:%M:%S')
-        
-        ema_slope_val = last_candle[f'EMA_{settings.EMA_SLOPE_EMA_LENGTH}']
-        ema_slope_prev = df_final.iloc[-(settings.EMA_SLOPE_LOOKBACK + 2)][f'EMA_{settings.EMA_SLOPE_EMA_LENGTH}']
+        atr_val = last_candle.get('ATR', 0)
+        close_price = last_candle['close']
+
+        # Log market state for debugging
+        adx_val = last_candle.get('ADX', 0)
+        atr_val = last_candle.get('ATR', 0)
+        rsi_val = last_candle.get('RSI', 50)
+        ema_val = last_candle.get(f'EMA_{settings.EMA_LENGTH}', 0)
+        vol_ma_col = f'VOL_MA_{settings.VOLUME_MA_LENGTH}'
+        vol_ma_val = last_candle.get(vol_ma_col, 0)
+        current_volume = last_candle.get('volume', 0)
+        st_dir_col = f"SUPERTd_{settings.SUPERTREND_LENGTH}_{settings.SUPERTREND_FACTOR}"
+        current_trend = last_candle[st_dir_col]
+        ema_slope_length = getattr(settings, 'EMA_SLOPE_EMA_LENGTH', settings.EMA_LENGTH)
+        ema_slope_lookback = getattr(settings, 'EMA_SLOPE_LOOKBACK', 3)
+        ema_slope_threshold = getattr(settings, 'EMA_SLOPE_THRESHOLD', 0.001)
+        ema_slope_val = last_candle.get(f'EMA_{ema_slope_length}', ema_val)
+        ema_slope_prev = df_final.iloc[-(ema_slope_lookback + 2)].get(f'EMA_{ema_slope_length}', ema_val)
         ema_slope_pct = (ema_slope_val - ema_slope_prev) / ema_slope_prev if ema_slope_prev != 0 else 0
-        is_flat_slope = abs(ema_slope_pct) < settings.EMA_SLOPE_THRESHOLD
 
-        self.logger.info(f"Market Data: {candle_time} | Close: {close_price} | Trend: {current_trend} | EMA{settings.EMA_LENGTH}: {ema_val:.2f} | ADX: {adx_val:.2f} | ATR: {atr_val:.2f} | RSI: {rsi_val:.2f} | Vol: {current_volume:.0f} (MA: {vol_ma_val:.0f}) | EMA{settings.EMA_SLOPE_EMA_LENGTH} Slope: {ema_slope_pct*100:.3f}% ({'FLAT' if is_flat_slope else 'STEEP'})")
+        self.logger.info(
+            f"Market Data: {candle_time} | Close: {close_price} | Trend: {current_trend} | "
+            f"EMA{settings.EMA_LENGTH}: {ema_val:.2f} | ADX: {adx_val:.2f} | ATR: {atr_val:.2f} | "
+            f"RSI: {rsi_val:.2f} | Vol: {current_volume:.0f} (MA: {vol_ma_val:.0f}) | "
+            f"EMA{ema_slope_length} Slope: {ema_slope_pct*100:.3f}% ({'FLAT' if abs(ema_slope_pct) < ema_slope_threshold else 'STEEP'})"
+        )
 
-
-
-        # --- STALENESS CHECK (Only skip TRADE logic, not analysis logging) ---
-        STALE_TOLERANCE = 120 
+        # --- STALENESS CHECK ---
+        STALE_TOLERANCE = 120
         if delay_seconds > STALE_TOLERANCE:
             self.logger.warning(f"Candle {candle_time} is STALE (Closed {int(delay_seconds)}s ago). Skipping trade logic.")
             return
 
-        # Determine Trend Strength
-        is_trending = adx_val > settings.ADX_THRESHOLD
-        
-        # Determine RSI Conditions
-        rsi_long_ok = settings.RSI_LONG_THRESHOLD < rsi_val < settings.RSI_OVERBOUGHT
-        rsi_short_ok = rsi_val > settings.RSI_OVERSOLD
-        
-        # Determine Volume Condition
-        vol_ok = current_volume > vol_ma_val
-        
-        # Determine Signal based on Trend Flip + EMA Filter
-        is_uptrend_long = close_price > ema_val
-        is_downtrend_short = close_price < ema_val
-        
-        # 1. LOGIC ĐÓNG LỆNH (Exit Priority)
-        if current_pos_amt > 0 and current_trend == -1: # Existing Long & Trend turns Red
-             self.logger.info(f"Trend flipped to RED. Closing LONG position ({current_pos_amt}).")
-             self.close_all_positions()
-        elif current_pos_amt < 0 and current_trend == 1: # Existing Short & Trend turns Green
-             self.logger.info(f"Trend flipped to GREEN. Closing SHORT position ({current_pos_amt}).")
-             self.close_all_positions()
-        
+        # --- UNIFIED SIGNAL EVALUATION ---
+        signal, actual_pos_size, reason = evaluate_signal(df_final, current_pos_amt)
+        self.logger.info(f"Signal evaluation: {reason}")
 
+        if signal in ('CLOSE_LONG', 'CLOSE_SHORT'):
+            direction = "LONG" if signal == 'CLOSE_LONG' else "SHORT"
+            self.logger.info(f"Trend flip signal. Closing {direction} position ({current_pos_amt}).")
+            self.close_all_positions()
 
-        # 2. LOGIC MỞ LỆNH (Entry Filtered)
-        signal: Optional[str] = None
-        if current_trend == 1 and previous_trend == -1 and is_uptrend_long:
-            if is_trending and rsi_long_ok and vol_ok:
-                signal = 'LONG'
-            else:
-                reasons = []
-                if not is_trending: reasons.append("ADX low")
-                if not rsi_long_ok: reasons.append(f"RSI invalid (Req: {settings.RSI_LONG_THRESHOLD}-{settings.RSI_OVERBOUGHT})")
-                if not vol_ok: reasons.append("Volume low")
-                self.logger.info(f"LONG signal detected, but {', '.join(reasons)}. (ADX: {adx_val:.2f}, RSI: {rsi_val:.2f}, Vol: {current_volume:.0f}). Skipping.")
-        elif current_trend == -1 and previous_trend == 1 and is_downtrend_short:
-            if is_trending and rsi_short_ok and vol_ok:
-                signal = 'SHORT'
-            else:
-                reasons = []
-                if not is_trending: reasons.append("ADX low")
-                if not rsi_short_ok: reasons.append("RSI oversold")
-                if not vol_ok: reasons.append("Volume low")
-                self.logger.info(f"SHORT signal detected, but {', '.join(reasons)}. (ADX: {adx_val:.2f}, RSI: {rsi_val:.2f}, Vol: {current_volume:.0f}). Skipping.")
-            
-        if signal:
-            if current_pos_amt == 0:
-                self.logger.info(f"SIGNAL DETECTED: {signal} (Position is Empty)")
-                # Dynamic Position Sizing based on EMA Slope
-                actual_pos_size = settings.REDUCED_POSITION_SIZE_PERCENT if is_flat_slope else settings.POSITION_SIZE_PERCENT
-                if is_flat_slope:
-                    self.logger.info(f"⚠️ EMA{settings.EMA_SLOPE_EMA_LENGTH} is FLAT (Slope: {ema_slope_pct*100:.3f}% < {settings.EMA_SLOPE_THRESHOLD*100}%). Reducing size to {actual_pos_size*100}%.")
-                
-                self.open_position(signal, close_price, atr_val, pos_size_pct=actual_pos_size)
-            else:
-                self.logger.info(f"SIGNAL DETECTED: {signal}, but already in position ({current_pos_amt}). Skipping.")
+        elif signal in ('LONG', 'SHORT'):
+            self.logger.info(f"SIGNAL DETECTED: {signal} | Pos size: {actual_pos_size*100:.1f}%")
+            if actual_pos_size < settings.POSITION_SIZE_PERCENT:
+                self.logger.info(f"⚠️ EMA slope FLAT. Reducing size to {actual_pos_size*100:.1f}%.")
+            self.open_position(signal, close_price, atr_val, pos_size_pct=actual_pos_size)
+
         else:
-            self.logger.info(f"No entry signal for {candle_time} (Current Trend: {current_trend}, Position: {current_pos_amt})")
+            self.logger.info(f"No actionable signal for {candle_time}. Position: {current_pos_amt}")
 
     def close_all_positions(self) -> None:
         self.logger.info("Closing all positions... fetching PnL/ROI for notification.")

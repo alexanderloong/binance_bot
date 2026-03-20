@@ -220,13 +220,16 @@ class ExchangeClient:
         except Exception as e:
             self.logger.error(f"Error fetching symbol info: {e}")
 
-    def fetch_ohlcv(self, limit: int = 100) -> Optional[pd.DataFrame]:
+    def fetch_ohlcv(self, limit: int = 100, timeframe: Optional[str] = None) -> Optional[pd.DataFrame]:
         """
         Returns kline data. Priority: WebSocket buffer. 
         Fallback: REST API (only if buffer is empty or stale).
         """
+        tf = timeframe or settings.TIMEFRAME
+        is_default_tf = (tf == settings.TIMEFRAME)
+        
         # If we have a buffer and it's somewhat fresh, return it
-        if self.klines_buffer is not None and not self.klines_buffer.empty:
+        if is_default_tf and self.klines_buffer is not None and not self.klines_buffer.empty:
             # Check if the buffer is too old (e.g., > 120s silence from WS)
             now_ts = synced_time()
             
@@ -237,7 +240,7 @@ class ExchangeClient:
 
         # --- REST FALLBACK / INITIAL POPULATION ---
         try:
-            bars = self._klines_with_retry(self.symbol, settings.TIMEFRAME, limit)
+            bars = self._klines_with_retry(self.symbol, tf, limit)
             
             if not bars:
                 return None
@@ -255,8 +258,8 @@ class ExchangeClient:
             # Convert timestamp
             df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms').dt.tz_localize('UTC').dt.tz_convert('Asia/Ho_Chi_Minh')
             
-            # Seed buffer
-            if self.klines_buffer is None:
+            # Seed buffer only if it's the default timeframe
+            if is_default_tf and self.klines_buffer is None:
                 self.klines_buffer = df[['timestamp', 'open', 'high', 'low', 'close', 'volume']].copy()
                 
             return df[['timestamp', 'open', 'high', 'low', 'close', 'volume']]

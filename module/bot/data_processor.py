@@ -5,6 +5,31 @@ from config import settings
 
 class DataProcessor:
     @staticmethod
+    def prepare_all_indicators(df: pd.DataFrame) -> pd.DataFrame:
+        df_ha = DataProcessor.calculate_heikin_ashi(df)
+        df_final = DataProcessor.calculate_supertrend(
+            df_ha, 
+            length=settings.SUPERTREND_LENGTH, 
+            multiplier=settings.SUPERTREND_FACTOR
+        )
+        df_final[f'EMA_{settings.EMA_LENGTH}'] = DataProcessor.calculate_ema(df_final, length=settings.EMA_LENGTH)[f'EMA_{settings.EMA_LENGTH}']
+        
+        adx_length = getattr(settings, 'ADX_LENGTH', 14)
+        df_final['ADX'] = DataProcessor.calculate_adx(df, length=adx_length)
+        
+        df_final['ATR'] = DataProcessor.calculate_atr(df, length=settings.ATR_LENGTH)
+        
+        rsi_length = getattr(settings, 'RSI_LENGTH', 14)
+        df_final['RSI'] = DataProcessor.calculate_rsi(df, length=rsi_length)
+        
+        df_final = DataProcessor.calculate_volume_ma(df_final, length=settings.VOLUME_MA_LENGTH)
+        
+        ema_slope_length = getattr(settings, 'EMA_SLOPE_EMA_LENGTH', settings.EMA_LENGTH)
+        df_final[f'EMA_{ema_slope_length}'] = DataProcessor.calculate_ema(df_final, length=ema_slope_length)[f'EMA_{ema_slope_length}']
+        
+        return df_final
+
+    @staticmethod
     def calculate_heikin_ashi(df: pd.DataFrame) -> pd.DataFrame:
         """
         Calculates Heikin Ashi candles.

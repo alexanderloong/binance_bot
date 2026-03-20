@@ -28,7 +28,7 @@ from module.backtest.data_loader import BacktestDataLoader
 from module.backtest.simulator import Simulator
 from module.backtest.reporter import BacktestReporter
 
-LIMIT = 228000
+LIMIT = 1000
 WORKERS = 5
 SLEEP = 1.5
 GEN_CHART = True
@@ -113,14 +113,7 @@ def run_backtest():
         return
 
     print(f"Processing {len(df)} candles...")
-    df_ha = DataProcessor.calculate_heikin_ashi(df)
-    df_st = DataProcessor.calculate_supertrend(df_ha)
-    df_st[f"EMA_{EMA_LENGTH}"] = DataProcessor.calculate_ema(df_st, length=EMA_LENGTH)[
-        f"EMA_{EMA_LENGTH}"
-    ]
-    df_st["ATR"] = DataProcessor.calculate_atr(df, length=ATR_LENGTH)
-    df_st = DataProcessor.calculate_volume_ma(df_st, length=VOLUME_MA_LENGTH)
-    df_final = df_st
+    df_final = DataProcessor.prepare_all_indicators(df)
 
     # HTF Filter: resample to higher timeframe and compute SuperTrend
     df_final = apply_htf_filter(df_final, df)
