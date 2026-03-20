@@ -6,7 +6,7 @@ import logging
 from typing import Optional, Any, List
 import pandas as pd
 
-from config import settings
+from resource.config import settings
 from module.bot.notifier import Notifier
 from .data_processor import DataProcessor
 from .utils import parse_timeframe_to_seconds
@@ -19,7 +19,9 @@ from .finance import (
 
 
 class Strategy:
-    def __init__(self, exchange_client: Any, logger: Any, notifier: Optional[Notifier] = None):
+    def __init__(
+        self, exchange_client: Any, logger: Any, notifier: Optional[Notifier] = None
+    ):
         self.client = exchange_client
         self.logger = logger
         self.notifier = notifier
@@ -37,7 +39,9 @@ class Strategy:
     # ------------------------------------------------------------------
 
     def _state_file(self) -> str:
-        return os.path.join(os.path.dirname(os.path.abspath(__file__)), "bot_state.json")
+        return os.path.join(
+            os.path.dirname(os.path.abspath(__file__)), "bot_state.json"
+        )
 
     def _load_state(self):
         try:
@@ -113,11 +117,15 @@ class Strategy:
         if df_htf is not None and not df_htf.empty:
             df_htf_ha = DataProcessor.calculate_heikin_ashi(df_htf)
             df_htf_st = DataProcessor.calculate_supertrend(df_htf_ha)
-            st_col = f"SUPERTd_{settings.SUPERTREND_LENGTH}_{settings.SUPERTREND_FACTOR}"
+            st_col = (
+                f"SUPERTd_{settings.SUPERTREND_LENGTH}_{settings.SUPERTREND_FACTOR}"
+            )
             htf_trend_val = df_htf_st[st_col].iloc[-2]
             df_final.loc[df_final.index[-2], "HTF_TREND"] = htf_trend_val
 
-        self._analyze_market_and_trade(df_final, current_pos_amt, self.entry_price, delay_seconds)
+        self._analyze_market_and_trade(
+            df_final, current_pos_amt, self.entry_price, delay_seconds
+        )
         return True
 
     # ------------------------------------------------------------------
@@ -189,7 +197,9 @@ class Strategy:
                     leverage=settings.LEVERAGE,
                     fee_rate=settings.TAKER_FEE_RATE,
                 )
-                label = "BREAKEVEN EXIT" if self.breakeven_activated else "STOP LOSS HIT"
+                label = (
+                    "BREAKEVEN EXIT" if self.breakeven_activated else "STOP LOSS HIT"
+                )
                 self.notifier.send_lark_message(
                     f"⚠️ **{label}**\nSL Target: {self.stop_loss_price:.2f}\n"
                     + result.format_summary()
@@ -210,9 +220,15 @@ class Strategy:
             last_closed_time = last_closed_candle["timestamp"]
             last_closed_ts_val = int(last_closed_time.timestamp())
 
-            if self.last_candle_time is not None and self.last_candle_time == last_closed_ts_val:
+            if (
+                self.last_candle_time is not None
+                and self.last_candle_time == last_closed_ts_val
+            ):
                 return None
-            if self.last_candle_time is not None and last_closed_ts_val < self.last_candle_time:
+            if (
+                self.last_candle_time is not None
+                and last_closed_ts_val < self.last_candle_time
+            ):
                 return None
 
             candle_close_time = last_closed_time + timedelta(seconds=self.tf_seconds)
@@ -249,9 +265,13 @@ class Strategy:
         ema_val = last_candle.get(f"EMA_{settings.EMA_LENGTH}", 0)
         vol_ma_val = last_candle.get(f"VOL_MA_{settings.VOLUME_MA_LENGTH}", 0)
         current_volume = last_candle.get("volume", 0)
-        st_dir_col = f"SUPERTd_{settings.SUPERTREND_LENGTH}_{settings.SUPERTREND_FACTOR}"
+        st_dir_col = (
+            f"SUPERTd_{settings.SUPERTREND_LENGTH}_{settings.SUPERTREND_FACTOR}"
+        )
         current_trend = last_candle[st_dir_col]
-        ema_slope_length = getattr(settings, "EMA_SLOPE_EMA_LENGTH", settings.EMA_LENGTH)
+        ema_slope_length = getattr(
+            settings, "EMA_SLOPE_EMA_LENGTH", settings.EMA_LENGTH
+        )
         ema_slope_lookback = getattr(settings, "EMA_SLOPE_LOOKBACK", 3)
         ema_slope_threshold = getattr(settings, "EMA_SLOPE_THRESHOLD", 0.001)
         ema_slope_val = last_candle.get(f"EMA_{ema_slope_length}", ema_val)
@@ -259,7 +279,9 @@ class Strategy:
             f"EMA_{ema_slope_length}", ema_val
         )
         ema_slope_pct = (
-            (ema_slope_val - ema_slope_prev) / ema_slope_prev if ema_slope_prev != 0 else 0
+            (ema_slope_val - ema_slope_prev) / ema_slope_prev
+            if ema_slope_prev != 0
+            else 0
         )
 
         self.logger.info(
@@ -288,10 +310,16 @@ class Strategy:
         elif signal in ("LONG", "SHORT"):
             self.logger.info(f"SIGNAL: {signal} | Size: {actual_pos_size*100:.1f}%")
             if actual_pos_size < settings.POSITION_SIZE_PERCENT:
-                self.logger.info(f"⚠️ EMA slope FLAT → reduced size {actual_pos_size*100:.1f}%.")
-            self.open_position(signal, close_price, atr_val, pos_size_pct=actual_pos_size)
+                self.logger.info(
+                    f"⚠️ EMA slope FLAT → reduced size {actual_pos_size*100:.1f}%."
+                )
+            self.open_position(
+                signal, close_price, atr_val, pos_size_pct=actual_pos_size
+            )
         else:
-            self.logger.info(f"No signal for {candle_time}. Position: {current_pos_amt}")
+            self.logger.info(
+                f"No signal for {candle_time}. Position: {current_pos_amt}"
+            )
 
     # ------------------------------------------------------------------
     # Order helpers
@@ -316,7 +344,9 @@ class Strategy:
                         fee_rate=settings.TAKER_FEE_RATE,
                     )
                     if self.notifier:
-                        self.notifier.send_lark_message(result.format_summary("POSITION CLOSED"))
+                        self.notifier.send_lark_message(
+                            result.format_summary("POSITION CLOSED")
+                        )
         except Exception:
             pass  # best-effort notification
 
@@ -367,7 +397,9 @@ class Strategy:
             )
 
             if trade_amount <= 0:
-                self.logger.error(f"Trade amount zero after rounding ({trade_amount}). Aborting.")
+                self.logger.error(
+                    f"Trade amount zero after rounding ({trade_amount}). Aborting."
+                )
                 return
 
             is_long = side == "LONG"
@@ -383,7 +415,9 @@ class Strategy:
                 f"SL: {self.stop_loss_price:.2f}"
             )
 
-            order_resp = self.client.create_order("buy" if is_long else "sell", trade_amount)
+            order_resp = self.client.create_order(
+                "buy" if is_long else "sell", trade_amount
+            )
 
             if order_resp:
                 self.in_position = True
@@ -393,7 +427,9 @@ class Strategy:
                 self._save_state()
 
                 if self.notifier:
-                    be_price = calc_breakeven_price(price, settings.TAKER_FEE_RATE, is_long)
+                    be_price = calc_breakeven_price(
+                        price, settings.TAKER_FEE_RATE, is_long
+                    )
                     self.notifier.send_lark_message(
                         f"✅ **Position Opened ({side})**\n"
                         f"Entry Price:  {price:.2f}\n"
@@ -437,7 +473,9 @@ class Strategy:
                 f"   (*vs current balance)\n"
             )
 
-            self.logger.info(f"Daily report: Net PNL {net_pnl:.2f}, Trades {trade_count}")
+            self.logger.info(
+                f"Daily report: Net PNL {net_pnl:.2f}, Trades {trade_count}"
+            )
             if self.notifier:
                 self.notifier.send_lark_message(message)
 

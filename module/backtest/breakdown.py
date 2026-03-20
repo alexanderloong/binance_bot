@@ -13,7 +13,6 @@ class BacktestBreakdown:
             return "No trades to breakdown."
 
         df_trades = pd.DataFrame(trades)
-
         if "time" not in df_trades.columns or "pnl" not in df_trades.columns:
             return "Invalid trade format for breakdown."
 
@@ -21,14 +20,8 @@ class BacktestBreakdown:
         df_trades["pnl"] = df_trades["pnl"].fillna(0.0)
         df_trades = df_trades.sort_values("time").reset_index(drop=True)
 
-        # FIX: timezone-aware timestamps cannot be converted to Period directly
-        # in newer pandas without a UserWarning. Remove tz info first.
         df_trades["year_month"] = (
-            df_trades["time"]
-            .dt.tz_convert(
-                None
-            )  # strip tz cleanly (vs tz_localize(None) which errors on aware)
-            .dt.to_period("M")
+            df_trades["time"].dt.tz_convert(None).dt.to_period("M")
         )
 
         monthly_grouped = df_trades.groupby("year_month").agg(pnl_sum=("pnl", "sum"))
@@ -47,11 +40,9 @@ class BacktestBreakdown:
         res_df = pd.DataFrame(res_records)
         pivot = res_df.pivot(index="year", columns="month", values="ret_pct")
         pivot = pivot.reindex(columns=range(1, 13))
-
-        # Yearly compound return: (1+r1)(1+r2)... - 1
         pivot["Yearly"] = ((1 + pivot.fillna(0) / 100).prod(axis=1) - 1) * 100
 
-        month_names = [
+        MONTH_ABBR = [
             "Jan",
             "Feb",
             "Mar",
@@ -66,33 +57,48 @@ class BacktestBreakdown:
             "Dec",
         ]
 
-        lines = []
-        lines.append("=" * 110)
-        lines.append("📅 MONTHLY & YEARLY RETURN BREAKDOWN (% Compounding Equity)")
-        lines.append("=" * 110)
+        def fmt_cell(val, width=6):
+            """Format a monthly return cell with colour-coded sign indicator."""
+            if pd.isna(val):
+                return f"{'·':>{width}}"
+            sign = "+" if val >= 0 else ""
+            return f"{sign}{val:.1f}".rjust(width)
 
-        header = (
-            f"{'Year':<5} | "
-            + " | ".join([f"{m:>5}" for m in month_names])
-            + f" | {'Yearly':>7}"
+        def fmt_yearly(val):
+            sign = "+" if val >= 0 else ""
+            return f"{sign}{val:.1f}%".rjust(8)
+
+        # ── Column widths ──────────────────────────────────────────────
+        COL_W = 7  # month columns
+        YEAR_W = 4
+        SEP = " │ "
+        EDGE = "│"
+
+        # Header
+        month_header = SEP.join(f"{m:>{COL_W}}" for m in MONTH_ABBR)
+        header = f"  {'Year':>{YEAR_W}} {EDGE} {month_header} {EDGE} {'Yearly':>8}"
+        divider_len = len(header)
+
+        lines = []
+        lines.append("╔" + "═" * (divider_len + 2) + "╗")
+        lines.append(
+            f"║  📅  MONTHLY & YEARLY RETURN BREAKDOWN  (% of Compounding Equity){'':>{divider_len - 63}}║"
         )
-        lines.append(header)
-        lines.append("-" * len(header))
+        lines.append("╠" + "═" * (divider_len + 2) + "╣")
+        lines.append(f"║ {header} ║")
+        lines.append("╠" + "═" * (divider_len + 2) + "╣")
 
         for year in pivot.index:
-            row_str = f"{year:<5} | "
-            month_strs = []
+            cells = []
             for month in range(1, 13):
                 val = pivot.loc[year, month]
-                if pd.isna(val):
-                    month_strs.append(f"{'—':>5}")
-                else:
-                    sign = "+" if val > 0 else ""
-                    month_strs.append(f"{sign}{val:>4.1f}")
+                cells.append(fmt_cell(val, COL_W))
+            month_row = SEP.join(cells)
             yearly_val = pivot.loc[year, "Yearly"]
-            yearly_sign = "+" if yearly_val > 0 else ""
-            row_str += " | ".join(month_strs) + f" | {yearly_sign}{yearly_val:>6.1f}%"
-            lines.append(row_str)
+            row = (
+                f"  {year:>{YEAR_W}} {EDGE} {month_row} {EDGE} {fmt_yearly(yearly_val)}"
+            )
+            lines.append(f"║ {row} ║")
 
-        lines.append("=" * 110)
+        lines.append("╚" + "═" * (divider_len + 2) + "╝")
         return "\n".join(lines)

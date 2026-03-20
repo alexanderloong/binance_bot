@@ -1,7 +1,7 @@
 import os
 import time
 import pandas as pd
-from config import CONSOLE_TRADE_LIMIT
+from resource.config import CONSOLE_TRADE_LIMIT
 from module.backtest.breakdown import BacktestBreakdown
 
 

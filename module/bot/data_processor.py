@@ -1,7 +1,7 @@
 import pandas as pd
 import numpy as np
 from typing import List
-from config import settings
+from resource.config import settings
 
 
 class DataProcessor:

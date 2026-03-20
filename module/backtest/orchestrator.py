@@ -8,7 +8,7 @@ sys.path.append(
     os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 )
 from module.bot.data_processor import DataProcessor
-from config import (
+from resource.config import (
     SYMBOL,
     TIMEFRAME,
     HTF_TIMEFRAME,
@@ -28,7 +28,7 @@ from module.backtest.data_loader import BacktestDataLoader
 from module.backtest.simulator import Simulator
 from module.backtest.reporter import BacktestReporter
 
-LIMIT = 228000
+LIMIT = 10000
 WORKERS = 5
 SLEEP = 1.5
 GEN_CHART = True
