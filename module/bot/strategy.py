@@ -294,6 +294,9 @@ class Strategy:
         if self.client.close_all_positions():
             self.in_position = False
             self.stop_loss_price = None
+            self.entry_price = None
+            self.breakeven_activated = False
+            self._save_state()
 
     def partial_close_position(self, quantity: float, side: str) -> None:
         self.logger.info(f"Partially closing {quantity:.4f} ({side})...")
@@ -338,7 +341,10 @@ class Strategy:
             
             if order_resp:
                 self.in_position = True
+                self.entry_price = price
+                self.breakeven_activated = False
                 self.trade_history.append(time.time())
+                self._save_state()
                 if self.notifier:
                     self.notifier.send_lark_message(
                         f"✅ **Position Opened ({side})**\n"
