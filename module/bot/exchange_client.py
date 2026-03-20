@@ -13,15 +13,16 @@ from config import settings
 # REST API timeouts: (connect_timeout, read_timeout) in seconds
 REST_TIMEOUT = (10, 30)
 
-# --- GLOBAL TIME SYNC ---
+# --- TIME SYNC ---
+# FIX: removed global monkey-patch of time.time (unsafe — affects all 3rd-party libs).
+# Use synced_time() explicitly wherever server-synced time is needed.
 _GLOBAL_TIME_OFFSET = 0.0
-_original_time = time.time
+_original_time = time.time   # captured once at import; never overwritten
+
 
 def synced_time() -> float:
+    """Returns epoch time corrected by the measured Binance server offset."""
     return _original_time() + _GLOBAL_TIME_OFFSET
-
-# Global monkey-patch
-time.time = synced_time
 
 from functools import wraps
 
@@ -152,37 +153,39 @@ class ExchangeClient:
         """Handles incoming WebSocket messages."""
         try:
             data = json.loads(message)
-            
-            # Handle kline event
+
             if 'e' in data and data['e'] == 'kline':
                 k = data['k']
-                is_candle_closed = k['x']
-                
-                # New candle data row
+
                 new_row = {
                     'timestamp': pd.to_datetime(k['t'], unit='ms').tz_localize('UTC').tz_convert('Asia/Ho_Chi_Minh'),
-                    'open': float(k['o']),
-                    'high': float(k['h']),
-                    'low': float(k['l']),
-                    'close': float(k['c']),
-                    'volume': float(k['v'])
+                    'open':   float(k['o']),
+                    'high':   float(k['h']),
+                    'low':    float(k['l']),
+                    'close':  float(k['c']),
+                    'volume': float(k['v']),
                 }
 
-                if self.klines_buffer is not None:
-                    self.last_ws_update = synced_time()
-                    # Update or append
-                    # If the timestamp matches the last row, update it (current unfinished candle)
-                    # If it's newer, append and trim
-                    last_ts = self.klines_buffer['timestamp'].iloc[-1]
-                    if new_row['timestamp'] == last_ts:
-                        for col in ['open', 'high', 'low', 'close', 'volume']:
-                            self.klines_buffer.iloc[-1, self.klines_buffer.columns.get_loc(col)] = new_row[col]
-                    elif new_row['timestamp'] > last_ts:
-                        # Append new candle
-                        self.klines_buffer = pd.concat([self.klines_buffer, pd.DataFrame([new_row])], ignore_index=True)
-                        # Keep only last 500 to be safe
-                        if len(self.klines_buffer) > 500:
-                            self.klines_buffer = self.klines_buffer.iloc[-500:].reset_index(drop=True)
+                # FIX: guard buffer writes with _ws_lock so fetch_ohlcv
+                # (main thread) never reads a partially-updated DataFrame.
+                with self._ws_lock:
+                    if self.klines_buffer is not None:
+                        self.last_ws_update = synced_time()
+                        last_ts = self.klines_buffer['timestamp'].iloc[-1]
+                        if new_row['timestamp'] == last_ts:
+                            for col in ['open', 'high', 'low', 'close', 'volume']:
+                                self.klines_buffer.iloc[
+                                    -1, self.klines_buffer.columns.get_loc(col)
+                                ] = new_row[col]
+                        elif new_row['timestamp'] > last_ts:
+                            self.klines_buffer = pd.concat(
+                                [self.klines_buffer, pd.DataFrame([new_row])],
+                                ignore_index=True,
+                            )
+                            if len(self.klines_buffer) > 500:
+                                self.klines_buffer = (
+                                    self.klines_buffer.iloc[-500:].reset_index(drop=True)
+                                )
         except Exception as e:
             self.logger.error(f"Error handling WS message: {e}")
 
@@ -228,15 +231,19 @@ class ExchangeClient:
         tf = timeframe or settings.TIMEFRAME
         is_default_tf = (tf == settings.TIMEFRAME)
         
-        # If we have a buffer and it's somewhat fresh, return it
-        if is_default_tf and self.klines_buffer is not None and not self.klines_buffer.empty:
-            # Check if the buffer is too old (e.g., > 120s silence from WS)
-            now_ts = synced_time()
-            
-            if (now_ts - self.last_ws_update) < 120: # 120s tolerance for WS silence
-                return self.klines_buffer.tail(limit).copy()
-            else:
-                self.logger.warning(f"WebSocket buffer stale (last update {now_ts - self.last_ws_update:.1f}s ago). Falling back to REST API...")
+        # FIX: acquire lock before reading buffer — prevents reading a
+        # partially-updated DataFrame while _on_ws_message is writing.
+        if is_default_tf:
+            with self._ws_lock:
+                if self.klines_buffer is not None and not self.klines_buffer.empty:
+                    now_ts = synced_time()
+                    if (now_ts - self.last_ws_update) < 120:
+                        return self.klines_buffer.tail(limit).copy()
+                    else:
+                        self.logger.warning(
+                            f"WebSocket buffer stale "
+                            f"({now_ts - self.last_ws_update:.1f}s). Falling back to REST..."
+                        )
 
         # --- REST FALLBACK / INITIAL POPULATION ---
         try:
@@ -357,41 +364,52 @@ class ExchangeClient:
             return False
     def get_yesterday_stats(self) -> Tuple[float, int, float]:
         """
-        Fetches realized PnL, number of trades, and total commission fees for the previous calendar day.
+        Fetches realized PnL, number of trades, and total commission fees
+        for the previous calendar day (Vietnam timezone, UTC+7).
+
         Returns:
             Tuple[float, int, float]: (Total PnL, Trade Count, Total Fee)
         """
         try:
-            # Calculate yesterday's range (00:00:00 to 23:59:59)
-            now = datetime.now()
+            # FIX: use explicit VN timezone — naive datetime.now() would produce
+            # wrong midnight boundaries if the server runs in a different TZ.
+            from datetime import timezone, timedelta as _td
+            VN_TZ = timezone(_td(hours=7))
+
+            now = datetime.now(VN_TZ)
             yesterday = now - timedelta(days=1)
-            start_time = int(yesterday.replace(hour=0, minute=0, second=0, microsecond=0).timestamp() * 1000)
-            end_time = int(yesterday.replace(hour=23, minute=59, second=59, microsecond=999).timestamp() * 1000)
-            
-            self.logger.info(f"Fetching stats from {yesterday.date()} ({start_time} to {end_time})")
-            
-            # Fetch REALIZED_PNL
+            start_time = int(
+                yesterday.replace(hour=0, minute=0, second=0, microsecond=0).timestamp() * 1000
+            )
+            end_time = int(
+                yesterday.replace(hour=23, minute=59, second=59, microsecond=999000).timestamp() * 1000
+            )
+
+            self.logger.info(
+                f"Fetching stats for {yesterday.date()} VN time "
+                f"({start_time} → {end_time})"
+            )
+
             pnl_history = self._get_income_history_with_retry(
                 symbol=self.symbol,
                 incomeType="REALIZED_PNL",
                 startTime=start_time,
                 endTime=end_time,
-                limit=1000
+                limit=1000,
             )
-            
-            # Fetch COMMISSION
+
             fee_history = self._get_income_history_with_retry(
                 symbol=self.symbol,
                 incomeType="COMMISSION",
                 startTime=start_time,
                 endTime=end_time,
-                limit=1000
+                limit=1000,
             )
-            
-            total_pnl = sum(float(item['income']) for item in pnl_history) if pnl_history else 0.0
+
+            total_pnl   = sum(float(i["income"]) for i in pnl_history) if pnl_history else 0.0
             trade_count = len(pnl_history) if pnl_history else 0
-            total_fee = sum(float(item['income']) for item in fee_history) if fee_history else 0.0
-            
+            total_fee   = sum(float(i["income"]) for i in fee_history) if fee_history else 0.0
+
             return total_pnl, trade_count, abs(total_fee)
         except Exception as e:
             self.logger.error(f"Error fetching yesterday's stats: {e}")
