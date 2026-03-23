@@ -28,10 +28,22 @@ from module.backtest.data_loader import BacktestDataLoader
 from module.backtest.simulator import Simulator
 from module.backtest.reporter import BacktestReporter
 
-LIMIT = 10000
+LIMIT = 1000  # Candles for long-term backtest (performance stats)
 WORKERS = 5
 SLEEP = 1.5
 GEN_CHART = True
+
+# ── HA Path-Dependency Note ────────────────────────────────────────────────
+# Heikin-Ashi open is recursive: ha_open[i] = (ha_open[i-1] + ha_close[i-1]) / 2
+# The live bot fetches exactly 300 candles (fetch_ohlcv limit=300) to compute
+# SuperTrend. Starting HA from a different candle count gives different HA_Open
+# values, different ST bands, and different flip points — so backtest signals
+# will NOT match live bot signals unless you also use exactly 300 candles.
+#
+# Use cases:
+#   LIMIT = LIVE_BOT_INDICATOR_WINDOW  → signal-level verification (match live)
+#   LIMIT = 228000                     → long-term PnL / statistical backtest
+LIVE_BOT_INDICATOR_WINDOW = 300
 
 
 def get_backtest_data(limit=LIMIT):
@@ -47,6 +59,9 @@ def simulate(
     use_volume_filter=True,
     use_htf_filter=True,
     use_breakeven=True,
+    use_stoploss=True,
+    use_takeprofit=False,
+    tp_multiplier=2.0,
     breakeven_multiplier=BREAKEVEN_MULTIPLIER,
     st_length=SUPERTREND_LENGTH,
     st_factor=SUPERTREND_FACTOR,
@@ -70,6 +85,9 @@ def simulate(
         use_htf_filter=use_htf_filter,
         use_breakeven=use_breakeven,
         breakeven_multiplier=breakeven_multiplier,
+        use_stoploss=use_stoploss,
+        use_takeprofit=use_takeprofit,
+        tp_multiplier=tp_multiplier,
     )
     # FIX [2][3]: pass df_final (HA-processed, has ATR on HA candles) — not raw df
     return sim.run(df_final)
@@ -150,6 +168,8 @@ def run_backtest():
         use_volume_filter=False,
         use_htf_filter=False,
         use_breakeven=False,
+        use_stoploss=False,
+        use_takeprofit=False,
     )
 
     # Log results

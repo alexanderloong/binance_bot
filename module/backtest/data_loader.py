@@ -105,7 +105,10 @@ class BacktestDataLoader:
         symbol_file_name = self.symbol.replace("/", "_").replace("\\", "_")
         symbol_api_name = self.symbol.replace("/", "").upper()
 
-        cache_dir = "resource"
+        cache_dir = os.path.join(
+            os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+            "resource"
+        )
         if not os.path.exists(cache_dir):
             os.makedirs(cache_dir)
         cache_file = os.path.join(cache_dir, f"backtest_data_{symbol_file_name}_{self.timeframe}.csv")

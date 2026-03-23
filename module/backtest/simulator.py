@@ -49,6 +49,9 @@ class Simulator:
         use_htf_filter=False,
         use_breakeven=False,
         breakeven_multiplier=1.0,
+        use_stoploss=True,
+        use_takeprofit=False,
+        tp_multiplier=2.0,
     ):
         self.timeframe = timeframe
         self.use_ema_filter = use_ema_filter
@@ -64,16 +67,23 @@ class Simulator:
         self.use_htf_filter = use_htf_filter
         self.use_breakeven = use_breakeven
         self.breakeven_multiplier = breakeven_multiplier
+        self.use_stoploss = use_stoploss
+        self.use_takeprofit = use_takeprofit
+        self.tp_multiplier = tp_multiplier
 
     # ------------------------------------------------------------------
     # Internal helpers
     # ------------------------------------------------------------------
 
     def _close_long_pnl(self, exit_price, entry_price, qty) -> float:
-        return calc_net_pnl(entry_price, exit_price, abs(qty), self.commission_rate, is_long=True)
+        return calc_net_pnl(
+            entry_price, exit_price, abs(qty), self.commission_rate, is_long=True
+        )
 
     def _close_short_pnl(self, exit_price, entry_price, qty) -> float:
-        return calc_net_pnl(entry_price, exit_price, abs(qty), self.commission_rate, is_long=False)
+        return calc_net_pnl(
+            entry_price, exit_price, abs(qty), self.commission_rate, is_long=False
+        )
 
     # ------------------------------------------------------------------
     # Main simulation loop
@@ -90,6 +100,7 @@ class Simulator:
         entry_price = 0.0
         liquidation_price = 0.0
         stop_loss_price = 0.0
+        take_profit_price = 0.0
         breakeven_target = 0.0
         is_breakeven_activated = False
         trades = []
@@ -100,41 +111,60 @@ class Simulator:
         # non-default params read the correct columns (not settings globals).
         # ------------------------------------------------------------------
         st_dir_col = f"SUPERTd_{self.st_length}_{self.st_factor}"
-        ema_col    = f"EMA_{self.ema_length}"
+        ema_col = f"EMA_{self.ema_length}"
         vol_ma_col = f"VOL_MA_{self.volume_ma_length}"
 
-        arr_open      = df_final["open"].to_numpy()
-        arr_close     = df_final["close"].to_numpy()
+        arr_open = df_final["open"].to_numpy()
+        arr_close = df_final["close"].to_numpy()
         arr_timestamp = df_final["timestamp"].to_numpy()
-        arr_atr       = df_final["ATR"].to_numpy()
-        arr_vol_ma    = df_final[vol_ma_col].to_numpy() if vol_ma_col in df_final.columns else np.zeros(len(df_final))
-        arr_htf       = df_final["HTF_TREND"].to_numpy() if "HTF_TREND" in df_final.columns else df_final[st_dir_col].to_numpy()
+        arr_atr = df_final["ATR"].to_numpy()
+        arr_vol_ma = (
+            df_final[vol_ma_col].to_numpy()
+            if vol_ma_col in df_final.columns
+            else np.zeros(len(df_final))
+        )
+        arr_htf = (
+            df_final["HTF_TREND"].to_numpy()
+            if "HTF_TREND" in df_final.columns
+            else df_final[st_dir_col].to_numpy()
+        )
 
         n = len(df_final)
 
         for i in range(3, n):
-            exec_open  = arr_open[i]
-            exec_time  = arr_timestamp[i]
-
-            # Candle-close only: all decisions are evaluated against the
-            # close price of the last fully completed candle.
+            # Signal candle = arr[i-1] (last CLOSED candle)
+            # Execution price = close of that same candle — mirrors live bot
+            # which calls open_position(close_price) where close_price = df.iloc[-2]["close"]
             signal_close = arr_close[i - 1]
+            exec_price = signal_close  # enter/exit at signal candle close
+            exec_time = arr_timestamp[i - 1]  # timestamp of the signal candle
 
             # ----------------------------------------------------------
             # 0. LIQUIDATION CHECK (candle-close price)
             # ----------------------------------------------------------
             if position_amt != 0:
-                liq_hit = (
-                    (position_amt > 0 and signal_close <= liquidation_price) or
-                    (position_amt < 0 and signal_close >= liquidation_price)
+                liq_hit = (position_amt > 0 and signal_close <= liquidation_price) or (
+                    position_amt < 0 and signal_close >= liquidation_price
                 )
                 if liq_hit:
-                    pnl = (self._close_long_pnl(liquidation_price, entry_price, position_amt)
-                           if position_amt > 0 else
-                           self._close_short_pnl(liquidation_price, entry_price, position_amt))
+                    pnl = (
+                        self._close_long_pnl(
+                            liquidation_price, entry_price, position_amt
+                        )
+                        if position_amt > 0
+                        else self._close_short_pnl(
+                            liquidation_price, entry_price, position_amt
+                        )
+                    )
                     balance += pnl
-                    trades.append({"time": exec_time, "type": "LIQUIDATION",
-                                   "price": liquidation_price, "pnl": pnl})
+                    trades.append(
+                        {
+                            "time": exec_time,
+                            "type": "LIQUIDATION",
+                            "price": liquidation_price,
+                            "pnl": pnl,
+                        }
+                    )
                     position_amt = 0
                     is_breakeven_activated = False
                     continue
@@ -145,32 +175,78 @@ class Simulator:
             if self.use_breakeven and position_amt != 0 and not is_breakeven_activated:
                 if position_amt > 0 and signal_close >= breakeven_target:
                     stop_loss_price = calc_breakeven_price(
-                        entry_price, self.commission_rate, is_long=True)
+                        entry_price, self.commission_rate, is_long=True
+                    )
                     is_breakeven_activated = True
                 elif position_amt < 0 and signal_close <= breakeven_target:
                     stop_loss_price = calc_breakeven_price(
-                        entry_price, self.commission_rate, is_long=False)
+                        entry_price, self.commission_rate, is_long=False
+                    )
                     is_breakeven_activated = True
 
             # ----------------------------------------------------------
-            # 1. STOP LOSS CHECK (candle-close price)
+            # 1. TAKE PROFIT CHECK (candle-close price)
             # ----------------------------------------------------------
-            if position_amt > 0 and signal_close <= stop_loss_price:
+            if self.use_takeprofit and position_amt != 0:
+                tp_hit = (
+                    (position_amt > 0 and signal_close >= take_profit_price) or
+                    (position_amt < 0 and signal_close <= take_profit_price)
+                )
+                if tp_hit:
+                    pnl = (
+                        self._close_long_pnl(take_profit_price, entry_price, position_amt)
+                        if position_amt > 0
+                        else self._close_short_pnl(take_profit_price, entry_price, position_amt)
+                    )
+                    balance += pnl
+                    type_str = "TAKE_PROFIT_LONG" if position_amt > 0 else "TAKE_PROFIT_SHORT"
+                    trades.append(
+                        {
+                            "time": exec_time,
+                            "type": type_str,
+                            "price": take_profit_price,
+                            "pnl": pnl,
+                        }
+                    )
+                    position_amt = 0
+                    is_breakeven_activated = False
+                    continue
+
+            # ----------------------------------------------------------
+            # 2. STOP LOSS CHECK (candle-close price)
+            # ----------------------------------------------------------
+            if self.use_stoploss and position_amt > 0 and signal_close <= stop_loss_price:
                 pnl = self._close_long_pnl(stop_loss_price, entry_price, position_amt)
                 balance += pnl
-                type_str = "BE_STOP_LONG" if is_breakeven_activated else "STOP_LOSS_LONG"
-                trades.append({"time": exec_time, "type": type_str,
-                                "price": stop_loss_price, "pnl": pnl})
+                type_str = (
+                    "BE_STOP_LONG" if is_breakeven_activated else "STOP_LOSS_LONG"
+                )
+                trades.append(
+                    {
+                        "time": exec_time,
+                        "type": type_str,
+                        "price": stop_loss_price,
+                        "pnl": pnl,
+                    }
+                )
                 position_amt = 0
                 is_breakeven_activated = False
                 continue
 
-            elif position_amt < 0 and signal_close >= stop_loss_price:
+            elif self.use_stoploss and position_amt < 0 and signal_close >= stop_loss_price:
                 pnl = self._close_short_pnl(stop_loss_price, entry_price, position_amt)
                 balance += pnl
-                type_str = "BE_STOP_SHORT" if is_breakeven_activated else "STOP_LOSS_SHORT"
-                trades.append({"time": exec_time, "type": type_str,
-                                "price": stop_loss_price, "pnl": pnl})
+                type_str = (
+                    "BE_STOP_SHORT" if is_breakeven_activated else "STOP_LOSS_SHORT"
+                )
+                trades.append(
+                    {
+                        "time": exec_time,
+                        "type": type_str,
+                        "price": stop_loss_price,
+                        "pnl": pnl,
+                    }
+                )
                 position_amt = 0
                 is_breakeven_activated = False
                 continue
@@ -199,68 +275,135 @@ class Simulator:
             # 3. EXIT LOGIC
             # ----------------------------------------------------------
             if signal == "CLOSE_LONG" and position_amt > 0:
-                pnl = self._close_long_pnl(exec_open, entry_price, position_amt)
+                pnl = self._close_long_pnl(exec_price, entry_price, position_amt)
                 balance += pnl
-                trades.append({"time": exec_time, "type": "CLOSE_LONG",
-                                "price": exec_open, "pnl": pnl})
+                trades.append(
+                    {
+                        "time": exec_time,
+                        "type": "CLOSE_LONG",
+                        "price": exec_price,
+                        "pnl": pnl,
+                    }
+                )
                 position_amt = 0
                 is_breakeven_activated = False
+
+                # ----------------------------------------------------------
+                # REVERSE: immediately re-evaluate for opposite entry at
+                # the same close price (ST flipped, open SHORT right away)
+                # ----------------------------------------------------------
+                rev_signal, rev_size, _ = evaluate_signal(
+                    df_window, 0,
+                    use_ema_filter=self.use_ema_filter,
+                    use_volume_filter=self.use_volume_filter,
+                    use_htf_filter=self.use_htf_filter,
+                    st_length=self.st_length,
+                    st_factor=self.st_factor,
+                    ema_length=self.ema_length,
+                    volume_ma_length=self.volume_ma_length,
+                )
+                if rev_signal == "SHORT":
+                    signal = "SHORT"
+                    suggested_pos_size = rev_size
 
             elif signal == "CLOSE_SHORT" and position_amt < 0:
-                pnl = self._close_short_pnl(exec_open, entry_price, position_amt)
+                pnl = self._close_short_pnl(exec_price, entry_price, position_amt)
                 balance += pnl
-                trades.append({"time": exec_time, "type": "CLOSE_SHORT",
-                                "price": exec_open, "pnl": pnl})
+                trades.append(
+                    {
+                        "time": exec_time,
+                        "type": "CLOSE_SHORT",
+                        "price": exec_price,
+                        "pnl": pnl,
+                    }
+                )
                 position_amt = 0
                 is_breakeven_activated = False
 
+                # ----------------------------------------------------------
+                # REVERSE: immediately re-evaluate for opposite entry at
+                # the same close price (ST flipped, open LONG right away)
+                # ----------------------------------------------------------
+                rev_signal, rev_size, _ = evaluate_signal(
+                    df_window, 0,
+                    use_ema_filter=self.use_ema_filter,
+                    use_volume_filter=self.use_volume_filter,
+                    use_htf_filter=self.use_htf_filter,
+                    st_length=self.st_length,
+                    st_factor=self.st_factor,
+                    ema_length=self.ema_length,
+                    volume_ma_length=self.volume_ma_length,
+                )
+                if rev_signal == "LONG":
+                    signal = "LONG"
+                    suggested_pos_size = rev_size
+
             # ----------------------------------------------------------
-            # 4. ENTRY LOGIC
+            # 4. ENTRY LOGIC (also handles reverse-trade after a close)
             # ----------------------------------------------------------
-            elif signal in ("LONG", "SHORT") and position_amt == 0:
-                effective_size = (suggested_pos_size if suggested_pos_size > 0
-                                  else self.position_size_percent)
-                notional_safe = (balance * effective_size * self.leverage) / (1 + self.commission_rate)
+            if signal in ("LONG", "SHORT") and position_amt == 0:
+                effective_size = (
+                    suggested_pos_size
+                    if suggested_pos_size > 0
+                    else self.position_size_percent
+                )
+                notional_safe = (balance * effective_size * self.leverage) / (
+                    1 + self.commission_rate
+                )
                 entry_fee = notional_safe * self.commission_rate
                 balance -= entry_fee
 
                 # ATR from signal candle (numpy array — no .iloc overhead)
                 atr_val = arr_atr[i - 1]
-                amount = notional_safe / exec_open
+                amount = notional_safe / exec_price
                 position_amt = amount if signal == "LONG" else -amount
-                entry_price = exec_open
+                entry_price = exec_price
                 is_breakeven_activated = False
 
                 if signal == "LONG":
                     liquidation_price = entry_price * (1 - 1 / self.leverage)
-                    stop_loss_price   = entry_price - (atr_val * self.sl_multiplier)
-                    breakeven_target  = entry_price + (entry_price - stop_loss_price) * self.breakeven_multiplier
+                    stop_loss_price = entry_price - (atr_val * self.sl_multiplier)
+                    take_profit_price = entry_price + (atr_val * self.tp_multiplier)
+                    breakeven_target = (
+                        entry_price
+                        + (entry_price - stop_loss_price) * self.breakeven_multiplier
+                    )
                 else:
                     liquidation_price = entry_price * (1 + 1 / self.leverage)
-                    stop_loss_price   = entry_price + (atr_val * self.sl_multiplier)
-                    breakeven_target  = entry_price - (stop_loss_price - entry_price) * self.breakeven_multiplier
+                    stop_loss_price = entry_price + (atr_val * self.sl_multiplier)
+                    take_profit_price = entry_price - (atr_val * self.tp_multiplier)
+                    breakeven_target = (
+                        entry_price
+                        - (stop_loss_price - entry_price) * self.breakeven_multiplier
+                    )
 
-                trades.append({
-                    "time":   exec_time,
-                    "type":   f"OPEN_{signal}",
-                    "price":  exec_open,
-                    "pnl":    -entry_fee,
-                    "amount": abs(amount),
-                })
+                trades.append(
+                    {
+                        "time": exec_time,
+                        "type": f"OPEN_{signal}",
+                        "price": exec_price,
+                        "pnl": -entry_fee,
+                        "amount": abs(amount),
+                    }
+                )
 
         # Close any still-open position at last close price
         if position_amt != 0:
             last_price = arr_close[-1]
-            pnl = (self._close_long_pnl(last_price, entry_price, position_amt)
-                   if position_amt > 0 else
-                   self._close_short_pnl(last_price, entry_price, position_amt))
+            pnl = (
+                self._close_long_pnl(last_price, entry_price, position_amt)
+                if position_amt > 0
+                else self._close_short_pnl(last_price, entry_price, position_amt)
+            )
             balance += pnl
-            trades.append({
-                "time":  arr_timestamp[-1],
-                "type":  "FINAL_CLOSE",
-                "price": last_price,
-                "pnl":   pnl,
-            })
+            trades.append(
+                {
+                    "time": arr_timestamp[-1],
+                    "type": "FINAL_CLOSE",
+                    "price": last_price,
+                    "pnl": pnl,
+                }
+            )
 
         metrics = MetricsCalculator.calculate(trades, balance, initial_balance)
         return metrics, trades
