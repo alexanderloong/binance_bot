@@ -135,7 +135,10 @@ class Strategy:
     def _manage_open_position(
         self, df: pd.DataFrame, current_pos_amt: float, entry_price: float
     ) -> None:
-        current_price = df["close"].iloc[-1]
+        # Candle-close only: evaluate all position management decisions
+        # against the close of the last COMPLETED candle (iloc[-2]).
+        # iloc[-1] is the candle currently forming and must not be used.
+        current_price = df["close"].iloc[-2]
         is_long = current_pos_amt > 0
 
         # Reconstruct SL if missing after bot restart
@@ -157,7 +160,6 @@ class Strategy:
             risk = abs(entry_price - self.stop_loss_price)
             if is_long:
                 if current_price >= entry_price + risk * settings.BREAKEVEN_MULTIPLIER:
-                    # FIX: exact breakeven formula instead of approximation
                     self.stop_loss_price = calc_breakeven_price(
                         entry_price, settings.TAKER_FEE_RATE, is_long=True
                     )
@@ -386,7 +388,6 @@ class Strategy:
                 self.logger.error("Could not fetch balance. Aborting.")
                 return
 
-            # FIX: fee-aware quantity calculation via finance module
             trade_amount, notional_usdt = calc_trade_quantity(
                 balance=balance,
                 pos_size_pct=pos_size_pct,
@@ -456,8 +457,6 @@ class Strategy:
             pnl_emoji = "🟢" if net_pnl >= 0 else "🔴"
             pnl_sign = "+" if net_pnl >= 0 else ""
             gross_sign = "+" if total_pnl >= 0 else ""
-            # NOTE: ROI uses current balance as denominator (best available proxy).
-            # Labelled clearly so it's not confused with per-trade margin ROI.
             roi_pct = (net_pnl / balance * 100) if balance else 0
             roi_sign = "+" if roi_pct >= 0 else ""
 

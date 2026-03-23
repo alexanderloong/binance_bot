@@ -1,3 +1,15 @@
+## [2.2.0] - 2026-03-23
+### Fixed
+- **Candle-Close Only Execution Model**: All position management decisions (liquidation, breakeven trigger, stop loss) in both the backtest simulator and the live bot now evaluate exclusively against the **close price of the last completed candle**. No intra-candle low/high triggers exist anywhere in the system, ensuring perfect parity between backtest and live behaviour.
+- **`simulator.py` — Liquidation check**: Replaced `exec_low`/`exec_high` with `arr_close[i-1]`.
+- **`simulator.py` — Breakeven trigger**: Replaced `arr_close[i-1]` check (already close-based but documented inconsistently) — logic confirmed correct and docstring updated.
+- **`simulator.py` — Stop loss check**: Replaced `exec_low`/`exec_high` with `arr_close[i-1]`.
+- **`simulator.py` — Column name lookup**: `st_dir_col`, `ema_col`, and `vol_ma_col` are now built from `self.st_length`, `self.st_factor`, `self.ema_length`, `self.volume_ma_length` instead of the global `settings` object. This fixes silent wrong-column reads when running optimization grid-searches with non-default parameters.
+- **`strategy.py` — SL and breakeven check**: `_manage_open_position()` now reads `df["close"].iloc[-2]` (last closed candle) instead of `df["close"].iloc[-1]` (the forming candle), aligning live bot with the candle-close only model.
+- **`simulator.py` — Removed `from resource.config import settings` inside `run()`**: No longer needed after column names are derived from `self.*`.
+
+---
+
 ## [2.1.0] - 2026-03-21
 ### Fixed
 - **Financial Calculations**: Extracted all PnL, fee, ROI, and position-sizing math into a dedicated `module/bot/finance.py` module — single source of truth across live bot and backtest engine.

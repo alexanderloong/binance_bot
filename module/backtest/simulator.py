@@ -16,12 +16,16 @@ class Simulator:
     • evaluate_signal receives a fixed 5-row window instead of a growing
       slice — it only ever reads iloc[-2] and iloc[-3].
 
-    Execution model (matches live bot):
+    Execution model (matches live bot — candle-close only):
     ─────────────────────────────────────────────────────────────────────
+    ALL decisions (liquidation, breakeven, SL, signal) are evaluated against
+    the CLOSE price of the last completed candle (arr_close[i-1]).
+    No intra-candle low/high triggers exist in either backtest or live bot.
+
     Signal candle  : df.iloc[i-1]  (last CLOSED candle)
+    Check price    : arr_close[i-1]  (close of last CLOSED candle)
     Entry price    : df.iloc[i]['open']  (next candle open)
     ATR for SL     : signal_candle['ATR']  (HA-processed)
-    SL check       : intra-candle low/high
 
     Fee accounting (split-leg):
     ─────────────────────────────────────────────────────────────────────
@@ -83,8 +87,6 @@ class Simulator:
         Args:
             df_final: DataFrame processed by DataProcessor.prepare_all_indicators()
         """
-        from resource.config import settings
-
         initial_balance = 1000.0
         balance = initial_balance
         position_amt = 0.0
@@ -97,38 +99,37 @@ class Simulator:
 
         # ------------------------------------------------------------------
         # PERF: Pre-extract all columns as numpy arrays — O(1) index vs .iloc
+        # Column names are built from self.* so optimization runs with
+        # non-default params read the correct columns (not settings globals).
         # ------------------------------------------------------------------
-        st_dir_col  = f"SUPERTd_{settings.SUPERTREND_LENGTH}_{settings.SUPERTREND_FACTOR}"
-        ema_col     = f"EMA_{settings.EMA_LENGTH}"
-        vol_ma_col  = f"VOL_MA_{settings.VOLUME_MA_LENGTH}"
+        st_dir_col = f"SUPERTd_{self.st_length}_{self.st_factor}"
+        ema_col    = f"EMA_{self.ema_length}"
+        vol_ma_col = f"VOL_MA_{self.volume_ma_length}"
 
         arr_open      = df_final["open"].to_numpy()
-        arr_high      = df_final["high"].to_numpy()
-        arr_low       = df_final["low"].to_numpy()
         arr_close     = df_final["close"].to_numpy()
-        arr_volume    = df_final["volume"].to_numpy()
         arr_timestamp = df_final["timestamp"].to_numpy()
         arr_atr       = df_final["ATR"].to_numpy()
-        arr_st_dir    = df_final[st_dir_col].to_numpy()
-        arr_ema       = df_final[ema_col].to_numpy()
         arr_vol_ma    = df_final[vol_ma_col].to_numpy() if vol_ma_col in df_final.columns else np.zeros(len(df_final))
-        arr_htf       = df_final["HTF_TREND"].to_numpy() if "HTF_TREND" in df_final.columns else arr_st_dir.copy()
+        arr_htf       = df_final["HTF_TREND"].to_numpy() if "HTF_TREND" in df_final.columns else df_final[st_dir_col].to_numpy()
 
         n = len(df_final)
 
         for i in range(3, n):
-            exec_open   = arr_open[i]
-            exec_high   = arr_high[i]
-            exec_low    = arr_low[i]
-            exec_time   = arr_timestamp[i]
+            exec_open  = arr_open[i]
+            exec_time  = arr_timestamp[i]
+
+            # Candle-close only: all decisions are evaluated against the
+            # close price of the last fully completed candle.
+            signal_close = arr_close[i - 1]
 
             # ----------------------------------------------------------
-            # 0. LIQUIDATION CHECK
+            # 0. LIQUIDATION CHECK (candle-close price)
             # ----------------------------------------------------------
             if position_amt != 0:
                 liq_hit = (
-                    (position_amt > 0 and exec_low  <= liquidation_price) or
-                    (position_amt < 0 and exec_high >= liquidation_price)
+                    (position_amt > 0 and signal_close <= liquidation_price) or
+                    (position_amt < 0 and signal_close >= liquidation_price)
                 )
                 if liq_hit:
                     pnl = (self._close_long_pnl(liquidation_price, entry_price, position_amt)
@@ -142,23 +143,22 @@ class Simulator:
                     continue
 
             # ----------------------------------------------------------
-            # 0.5 BREAKEVEN TRIGGER (uses signal candle close = arr_close[i-1])
+            # 0.5 BREAKEVEN TRIGGER (candle-close price)
             # ----------------------------------------------------------
             if self.use_breakeven and position_amt != 0 and not is_breakeven_activated:
-                sig_close = arr_close[i - 1]
-                if position_amt > 0 and sig_close >= breakeven_target:
+                if position_amt > 0 and signal_close >= breakeven_target:
                     stop_loss_price = calc_breakeven_price(
                         entry_price, self.commission_rate, is_long=True)
                     is_breakeven_activated = True
-                elif position_amt < 0 and sig_close <= breakeven_target:
+                elif position_amt < 0 and signal_close <= breakeven_target:
                     stop_loss_price = calc_breakeven_price(
                         entry_price, self.commission_rate, is_long=False)
                     is_breakeven_activated = True
 
             # ----------------------------------------------------------
-            # 1. STOP LOSS CHECK (intra-candle low/high)
+            # 1. STOP LOSS CHECK (candle-close price)
             # ----------------------------------------------------------
-            if position_amt > 0 and exec_low <= stop_loss_price:
+            if position_amt > 0 and signal_close <= stop_loss_price:
                 pnl = self._close_long_pnl(stop_loss_price, entry_price, position_amt)
                 balance += pnl
                 type_str = "BE_STOP_LONG" if is_breakeven_activated else "STOP_LOSS_LONG"
@@ -168,7 +168,7 @@ class Simulator:
                 is_breakeven_activated = False
                 continue
 
-            elif position_amt < 0 and exec_high >= stop_loss_price:
+            elif position_amt < 0 and signal_close >= stop_loss_price:
                 pnl = self._close_short_pnl(stop_loss_price, entry_price, position_amt)
                 balance += pnl
                 type_str = "BE_STOP_SHORT" if is_breakeven_activated else "STOP_LOSS_SHORT"
@@ -247,7 +247,7 @@ class Simulator:
                     "amount": abs(amount),
                 })
 
-        # Close any still-open position at last price
+        # Close any still-open position at last close price
         if position_amt != 0:
             last_price = arr_close[-1]
             pnl = (self._close_long_pnl(last_price, entry_price, position_amt)
