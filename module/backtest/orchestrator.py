@@ -55,11 +55,11 @@ def get_backtest_data(limit=LIMIT):
 
 def simulate(
     df_final,
-    use_ema_filter=True,
-    use_volume_filter=True,
-    use_htf_filter=True,
-    use_breakeven=True,
-    use_stoploss=True,
+    use_ema_filter=False,
+    use_volume_filter=False,
+    use_htf_filter=False,
+    use_breakeven=False,
+    use_stoploss=False,
     use_takeprofit=False,
     tp_multiplier=2.0,
     breakeven_multiplier=BREAKEVEN_MULTIPLIER,
