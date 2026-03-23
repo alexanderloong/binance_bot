@@ -29,7 +29,7 @@ class TradingConfig:
 
     # Strategy Parameters
     SUPERTREND_LENGTH: int = 18
-    SUPERTREND_FACTOR: float = 1.45
+    SUPERTREND_FACTOR: float = 3
     EMA_LENGTH: int = 97
 
     # Risk Management
