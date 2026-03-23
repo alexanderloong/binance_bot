@@ -9,6 +9,10 @@ def evaluate_signal(
     use_ema_filter: bool = True,
     use_volume_filter: bool = True,
     use_htf_filter: bool = True,
+    st_length: int = settings.SUPERTREND_LENGTH,
+    st_factor: float = settings.SUPERTREND_FACTOR,
+    ema_length: int = settings.EMA_LENGTH,
+    volume_ma_length: int = settings.VOLUME_MA_LENGTH,
 ) -> tuple[Optional[str], float, str]:
     """
     Evaluates the trading signal.
@@ -26,14 +30,14 @@ def evaluate_signal(
     last_candle = df_final.iloc[-2]
     prev_candle = df_final.iloc[-3]
 
-    st_dir_col = f"SUPERTd_{settings.SUPERTREND_LENGTH}_{settings.SUPERTREND_FACTOR}"
+    st_dir_col = f"SUPERTd_{st_length}_{st_factor}"
 
     current_trend  = last_candle[st_dir_col]
     previous_trend = prev_candle[st_dir_col]
 
     close_price    = last_candle["close"]
-    ema_val        = last_candle[f"EMA_{settings.EMA_LENGTH}"]
-    vol_ma_val     = last_candle.get(f"VOL_MA_{settings.VOLUME_MA_LENGTH}", 0)
+    ema_val        = last_candle[f"EMA_{ema_length}"]
+    vol_ma_val     = last_candle.get(f"VOL_MA_{volume_ma_length}", 0)
     current_volume = last_candle.get("volume", 0)
     htf_trend      = last_candle.get("HTF_TREND", current_trend)
 

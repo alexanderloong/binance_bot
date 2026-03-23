@@ -1,5 +1,6 @@
 import pandas as pd
 import math
+import statistics
 
 
 class MetricsCalculator:
@@ -90,8 +91,6 @@ class MetricsCalculator:
         # ------------------------------------------------------------------
         sharpe = 0.0
         if len(trade_cycles) >= 2:
-            import statistics
-
             mean_r = statistics.mean(trade_cycles)
             std_r = statistics.stdev(trade_cycles)
             if std_r > 0:

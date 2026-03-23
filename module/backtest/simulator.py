@@ -2,7 +2,7 @@ import pandas as pd
 import numpy as np
 from module.bot.core_strategy import evaluate_signal
 from module.backtest.metrics import MetricsCalculator
-from module.bot.finance import calc_breakeven_price
+from module.bot.finance import calc_breakeven_price, calc_net_pnl
 
 
 class Simulator:
@@ -69,25 +69,22 @@ class Simulator:
     # Internal helpers
     # ------------------------------------------------------------------
 
-    def _exit_fee(self, price: float, qty: float) -> float:
-        return abs(price) * abs(qty) * self.commission_rate
-
     def _close_long_pnl(self, exit_price, entry_price, qty) -> float:
-        return (exit_price - entry_price) * qty - self._exit_fee(exit_price, qty)
+        return calc_net_pnl(entry_price, exit_price, abs(qty), self.commission_rate, is_long=True)
 
     def _close_short_pnl(self, exit_price, entry_price, qty) -> float:
-        return (entry_price - exit_price) * abs(qty) - self._exit_fee(exit_price, qty)
+        return calc_net_pnl(entry_price, exit_price, abs(qty), self.commission_rate, is_long=False)
 
     # ------------------------------------------------------------------
     # Main simulation loop
     # ------------------------------------------------------------------
 
-    def run(self, df_final):
+    def run(self, df_final, initial_balance: float = 1000.0):
         """
         Args:
-            df_final: DataFrame processed by DataProcessor.prepare_all_indicators()
+            df_final:        DataFrame processed by DataProcessor.prepare_all_indicators()
+            initial_balance: Starting account balance in USDT (default 1000).
         """
-        initial_balance = 1000.0
         balance = initial_balance
         position_amt = 0.0
         entry_price = 0.0
@@ -192,6 +189,10 @@ class Simulator:
                 use_ema_filter=self.use_ema_filter,
                 use_volume_filter=self.use_volume_filter,
                 use_htf_filter=self.use_htf_filter,
+                st_length=self.st_length,
+                st_factor=self.st_factor,
+                ema_length=self.ema_length,
+                volume_ma_length=self.volume_ma_length,
             )
 
             # ----------------------------------------------------------

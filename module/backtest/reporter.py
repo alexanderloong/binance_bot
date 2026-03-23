@@ -10,7 +10,10 @@ class BacktestReporter:
 
     @staticmethod
     def log_results(res, trades, df):
-        log_dir = "resource/backtest_logs"
+        log_dir = os.path.join(
+            os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+            "resource", "backtest_logs"
+        )
         os.makedirs(log_dir, exist_ok=True)
 
         timestamp = time.strftime("%Y%m%d_%H%M%S")
