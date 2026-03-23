@@ -135,7 +135,7 @@ class Simulator:
             # Signal candle = arr[i-1] (last CLOSED candle)
             # Execution price = close of that same candle — mirrors live bot
             # which calls open_position(close_price) where close_price = df.iloc[-2]["close"]
-            signal_close = arr_close[i - 1]
+            signal_close = arr_close[i - 2]
             exec_price = signal_close  # enter/exit at signal candle close
             exec_time = arr_timestamp[i - 1]  # timestamp of the signal candle
 
@@ -188,18 +188,23 @@ class Simulator:
             # 1. TAKE PROFIT CHECK (candle-close price)
             # ----------------------------------------------------------
             if self.use_takeprofit and position_amt != 0:
-                tp_hit = (
-                    (position_amt > 0 and signal_close >= take_profit_price) or
-                    (position_amt < 0 and signal_close <= take_profit_price)
+                tp_hit = (position_amt > 0 and signal_close >= take_profit_price) or (
+                    position_amt < 0 and signal_close <= take_profit_price
                 )
                 if tp_hit:
                     pnl = (
-                        self._close_long_pnl(take_profit_price, entry_price, position_amt)
+                        self._close_long_pnl(
+                            take_profit_price, entry_price, position_amt
+                        )
                         if position_amt > 0
-                        else self._close_short_pnl(take_profit_price, entry_price, position_amt)
+                        else self._close_short_pnl(
+                            take_profit_price, entry_price, position_amt
+                        )
                     )
                     balance += pnl
-                    type_str = "TAKE_PROFIT_LONG" if position_amt > 0 else "TAKE_PROFIT_SHORT"
+                    type_str = (
+                        "TAKE_PROFIT_LONG" if position_amt > 0 else "TAKE_PROFIT_SHORT"
+                    )
                     trades.append(
                         {
                             "time": exec_time,
@@ -215,7 +220,11 @@ class Simulator:
             # ----------------------------------------------------------
             # 2. STOP LOSS CHECK (candle-close price)
             # ----------------------------------------------------------
-            if self.use_stoploss and position_amt > 0 and signal_close <= stop_loss_price:
+            if (
+                self.use_stoploss
+                and position_amt > 0
+                and signal_close <= stop_loss_price
+            ):
                 pnl = self._close_long_pnl(stop_loss_price, entry_price, position_amt)
                 balance += pnl
                 type_str = (
@@ -233,7 +242,11 @@ class Simulator:
                 is_breakeven_activated = False
                 continue
 
-            elif self.use_stoploss and position_amt < 0 and signal_close >= stop_loss_price:
+            elif (
+                self.use_stoploss
+                and position_amt < 0
+                and signal_close >= stop_loss_price
+            ):
                 pnl = self._close_short_pnl(stop_loss_price, entry_price, position_amt)
                 balance += pnl
                 type_str = (
@@ -293,7 +306,8 @@ class Simulator:
                 # the same close price (ST flipped, open SHORT right away)
                 # ----------------------------------------------------------
                 rev_signal, rev_size, _ = evaluate_signal(
-                    df_window, 0,
+                    df_window,
+                    0,
                     use_ema_filter=self.use_ema_filter,
                     use_volume_filter=self.use_volume_filter,
                     use_htf_filter=self.use_htf_filter,
@@ -325,7 +339,8 @@ class Simulator:
                 # the same close price (ST flipped, open LONG right away)
                 # ----------------------------------------------------------
                 rev_signal, rev_size, _ = evaluate_signal(
-                    df_window, 0,
+                    df_window,
+                    0,
                     use_ema_filter=self.use_ema_filter,
                     use_volume_filter=self.use_volume_filter,
                     use_htf_filter=self.use_htf_filter,
