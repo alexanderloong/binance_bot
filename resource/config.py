@@ -28,8 +28,8 @@ class TradingConfig:
     BREAKEVEN_MULTIPLIER: float = 2.0
 
     # Strategy Parameters
-    SUPERTREND_LENGTH: int = 18
-    SUPERTREND_FACTOR: float = 3
+    SUPERTREND_LENGTH: int = 19
+    SUPERTREND_FACTOR: float = 2.7
     EMA_LENGTH: int = 97
 
     # Risk Management

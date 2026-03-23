@@ -34,21 +34,23 @@ def run_simulation(st_len, st_factor, df_final):
 
 
 def run_optimization():
-    optimizer = BaseOptimizer("SuperTrend Length Optimization")
+    optimizer = BaseOptimizer("SuperTrend Optimization")
 
     if not optimizer.load_and_prepare_data():
         return
 
     # Define SuperTrend length range
-    st_lengths = np.arange(18, 19, 1)
-    st_factors = np.arange(1, 3, 0.2)
+    st_lengths = np.arange(18, 20, 1)
+    st_factors = np.arange(2.6, 2.86, 0.05)
 
     # Create tasks
     tasks = [(st_len, st_factor) for st_len in st_lengths for st_factor in st_factors]
 
     results = optimizer.run_parallel(tasks, run_simulation)
 
-    opt_df = optimizer.save_and_analyze(results, "optimization_results_st_length.csv")
+    opt_df = optimizer.save_and_analyze(
+        results, "resource/optimization_results_supertrend.csv"
+    )
 
     if opt_df is not None and not opt_df.empty:
         # Recommend the best overall (Balance MDD and PnL)
