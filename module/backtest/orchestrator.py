@@ -166,10 +166,10 @@ def run_backtest():
     res, trades = simulate(
         df_final,
         use_ema_filter=True,
-        use_volume_filter=False,
+        use_volume_filter=True,
         use_htf_filter=False,
         use_breakeven=False,
-        use_stoploss=False,
+        use_stoploss=True,
         use_takeprofit=False,
     )
 

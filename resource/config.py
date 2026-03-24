@@ -37,8 +37,8 @@ class TradingConfig:
     POSITION_SIZE_PERCENT: float = 1
 
     # ATR Stop Loss
-    ATR_LENGTH: int = 14
-    ATR_MULTIPLIER: float = 0.74
+    ATR_LENGTH: int = 18
+    ATR_MULTIPLIER: float = 1.6
 
     # Fee Rate (Taker - Binance Futures, no BNB discount)
     TAKER_FEE_RATE: float = 0.0005
