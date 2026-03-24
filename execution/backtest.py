@@ -38,6 +38,7 @@ class BacktestEngine(ExecutionEngine):
         self.entry_price = 0.0
         self.position_size = 0.0
         self.sl_price = 0.0
+        self.entry_fee = 0.0
 
         self.trades = []
         self.equity_curve = []
@@ -90,9 +91,9 @@ class BacktestEngine(ExecutionEngine):
             # 2. Record Equity MTM
             unrealized_pnl = 0
             if self.position == 1:
-                unrealized_pnl = (row["close"] - self.entry_price) * self.position_size
+                unrealized_pnl = (row["close"] - self.entry_price) * self.position_size - self.entry_fee
             elif self.position == -1:
-                unrealized_pnl = (self.entry_price - row["close"]) * self.position_size
+                unrealized_pnl = (self.entry_price - row["close"]) * self.position_size - self.entry_fee
 
             self.equity_curve.append(
                 {"timestamp": index, "equity": self.capital + unrealized_pnl}
@@ -116,12 +117,12 @@ class BacktestEngine(ExecutionEngine):
         timestamp = kwargs.get("timestamp")
         size = self.risk_manager.calculate_position_size(self.capital, price)
         fee = price * size * self.taker_fee
-        self.capital -= fee
 
         current_atr = kwargs.get("current_atr", 0)
         self.position = 1
         self.entry_price = price
         self.position_size = size
+        self.entry_fee = fee
         if self.sl_atr_multiplier > 0 and current_atr > 0:
             self.sl_price = price - (current_atr * self.sl_atr_multiplier)
         else:
@@ -142,12 +143,12 @@ class BacktestEngine(ExecutionEngine):
         timestamp = kwargs.get("timestamp")
         size = self.risk_manager.calculate_position_size(self.capital, price)
         fee = price * size * self.taker_fee
-        self.capital -= fee
 
         current_atr = kwargs.get("current_atr", 0)
         self.position = -1
         self.entry_price = price
         self.position_size = size
+        self.entry_fee = fee
         if self.sl_atr_multiplier > 0 and current_atr > 0:
             self.sl_price = price + (current_atr * self.sl_atr_multiplier)
         else:
@@ -171,9 +172,9 @@ class BacktestEngine(ExecutionEngine):
         fee = price * self.position_size * self.taker_fee
         pnl = 0
         if self.position == 1:
-            pnl = (price - self.entry_price) * self.position_size - fee
+            pnl = (price - self.entry_price) * self.position_size - fee - self.entry_fee
         elif self.position == -1:
-            pnl = (self.entry_price - price) * self.position_size - fee
+            pnl = (self.entry_price - price) * self.position_size - fee - self.entry_fee
 
         self.capital += pnl
 
@@ -192,6 +193,7 @@ class BacktestEngine(ExecutionEngine):
         self.position = 0
         self.entry_price = 0
         self.position_size = 0
+        self.entry_fee = 0.0
 
     def generate_report(self, silent=False):
         trades_df = pd.DataFrame(self.trades)

@@ -3,18 +3,23 @@ from strategy.base import BaseStrategy
 from indicators.heikin_ashi import calculate_heikin_ashi
 from indicators.supertrend import calculate_supertrend
 from indicators.atr import calculate_atr
+from indicators.ema import calculate_ema
 from config import settings
 
 class SupertrendHAStrategy(BaseStrategy):
-    def __init__(self, period=None, multiplier=None, atr_period=None):
+    def __init__(self, period=None, multiplier=None, atr_period=None, ema_period=None):
         super().__init__("Supertrend HA")
         self.period = period if period is not None else settings.SUPERTREND_PERIOD
         self.multiplier = multiplier if multiplier is not None else settings.SUPERTREND_MULTIPLIER
-        self.atr_period = atr_period if atr_period is not None else 14
+        self.atr_period = atr_period if atr_period is not None else settings.ATR_PERIOD
+        self.ema_period = ema_period if ema_period is not None else settings.EMA_PERIOD
 
     def generate_signals(self, df: pd.DataFrame) -> pd.DataFrame:
         # Calculate ATR
         df = calculate_atr(df, period=self.atr_period)
+        
+        # Calculate EMA
+        df = calculate_ema(df, period=self.ema_period)
         
         # Calculate HA candles
         df = calculate_heikin_ashi(df)
@@ -27,10 +32,10 @@ class SupertrendHAStrategy(BaseStrategy):
         # Detect flips
         st_shifted = df['supertrend'].shift(1)
         
-        # Long entry: previous was -1 or 0, now 1
-        long_condition = (st_shifted <= 0) & (df['supertrend'] == 1)
-        # Short entry: previous was 1 or 0, now -1
-        short_condition = (st_shifted >= 0) & (df['supertrend'] == -1)
+        # Long entry: previous was -1 or 0, now 1 AND price is above EMA 200
+        long_condition = (st_shifted <= 0) & (df['supertrend'] == 1) & (df['close'] > df['ema'])
+        # Short entry: previous was 1 or 0, now -1 AND price is below EMA 200
+        short_condition = (st_shifted >= 0) & (df['supertrend'] == -1) & (df['close'] < df['ema'])
         
         df.loc[long_condition, 'signal'] = 1
         df.loc[short_condition, 'signal'] = -1
