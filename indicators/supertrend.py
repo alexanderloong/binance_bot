@@ -11,7 +11,16 @@ def calculate_atr(df: pd.DataFrame, period: int = 10) -> pd.Series:
     tr3 = (low - close.shift(1)).abs()
     
     tr = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
-    return tr.rolling(period).mean()
+    
+    # Exact TradingView `ta.rma` representation
+    rma = pd.Series(np.nan, index=tr.index)
+    if len(tr) >= period:
+        rma.iloc[period-1] = tr.iloc[:period].mean()
+        alpha = 1.0 / period
+        for i in range(period, len(tr)):
+            rma.iloc[i] = alpha * tr.iloc[i] + (1 - alpha) * rma.iloc[i-1]
+            
+    return rma
 
 def calculate_supertrend(df: pd.DataFrame, period: int = 10, multiplier: float = 3.0) -> pd.DataFrame:
     high = df['ha_high'] if 'ha_high' in df.columns else df['high']

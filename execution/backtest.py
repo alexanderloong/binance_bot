@@ -21,31 +21,37 @@ class BacktestEngine(ExecutionEngine):
     def run(self, df: pd.DataFrame):
         logger.info(f"Starting backtest with {self.initial_capital} USDT")
         
+        pending_signal = 0
         for index, row in df.iterrows():
-            current_price = row['close']
-            signal = row.get('signal', 0)
+            current_open = row['open']
             
-            if signal == 1:
+            # 1. Execute pending signal from previous candle at current OPEN
+            if pending_signal == 1:
                 if self.position == -1:
-                    self.close_position(current_price, timestamp=index, reason="Close Short")
+                    self.close_position(current_open, timestamp=index, reason="Close Short")
                 if self.position == 0:
-                    self.execute_long(current_price, timestamp=index)
-            elif signal == -1:
+                    self.execute_long(current_open, timestamp=index)
+            elif pending_signal == -1:
                 if self.position == 1:
-                    self.close_position(current_price, timestamp=index, reason="Close Long")
+                    self.close_position(current_open, timestamp=index, reason="Close Long")
                 if self.position == 0:
-                    self.execute_short(current_price, timestamp=index)
+                    self.execute_short(current_open, timestamp=index)
             
+            # 2. Record Equity MTM
             unrealized_pnl = 0
             if self.position == 1:
-                unrealized_pnl = (current_price - self.entry_price) * self.position_size
+                unrealized_pnl = (row['close'] - self.entry_price) * self.position_size
             elif self.position == -1:
-                unrealized_pnl = (self.entry_price - current_price) * self.position_size
+                unrealized_pnl = (self.entry_price - row['close']) * self.position_size
                 
             self.equity_curve.append({
                 'timestamp': index,
                 'equity': self.capital + unrealized_pnl
             })
+            
+            # 3. New signal generation at candle CLOSE
+            # If the strategy has given a signal, it becomes pending for NEXT candle's open
+            pending_signal = row.get('signal', 0)
             
         if self.position != 0:
             last_idx = df.index[-1]
@@ -145,3 +151,29 @@ class BacktestEngine(ExecutionEngine):
         logger.info(f"Winrate: {winrate:.2f}%")
         logger.info(f"Max Drawdown: {max_drawdown:.2f}%")
         logger.info("=======================")
+        logger.info("=== LAST 10 TRADES ===")
+        paired_trades = []
+        open_trade = None
+        for t in self.trades:
+            if t['action'] in ['LONG', 'SHORT']:
+                open_trade = t
+            elif t['action'] == 'CLOSE' and open_trade:
+                paired_trades.append({
+                    'entry_time': open_trade['timestamp'],
+                    'exit_time': t['timestamp'],
+                    'direction': open_trade['action'],
+                    'entry_price': open_trade['price'],
+                    'exit_price': t['price'],
+                    'size': t['size'],
+                    'pnl': t['pnl'],
+                    'reason': t.get('reason', '')
+                })
+                open_trade = None
+        
+        last_10 = paired_trades[-10:] if len(paired_trades) >= 10 else paired_trades
+        for pt in last_10:
+            t_in = pt['entry_time'].strftime('%m-%d %H:%M') if hasattr(pt['entry_time'], 'strftime') else str(pt['entry_time'])[:16]
+            if pt['exit_time'] == 'OPEN':
+                logger.info(f"[{t_in}] OPEN {pt['direction'][:1]} @ {pt['entry_price']:.1f}")
+            else:
+                logger.info(f"[{t_in}] {pt['direction'][:1]} {pt['entry_price']:.1f} -> {pt['exit_price']:.1f} | PnL: {pt['pnl']:.2f}U")

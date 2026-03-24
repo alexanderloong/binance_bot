@@ -28,7 +28,7 @@ async def run_live(client: AsyncClient, engine: LiveEngine, bs_manager: BinanceS
                 
                 # Only execute strategy on candle close to prevent repainting issues
                 if is_closed:
-                    timestamp = pd.to_datetime(kline['t'], unit='ms')
+                    timestamp = pd.to_datetime(kline['t'], unit='ms').tz_localize('UTC').tz_convert('Asia/Ho_Chi_Minh').tz_localize(None)
                     close_price = float(kline['c'])
                     logger.info(f"Candle closed at {timestamp}. Close price: {close_price}")
                     
