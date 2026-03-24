@@ -33,8 +33,8 @@ class TradingConfig:
     EMA_LENGTH: int = 116
 
     # Risk Management
-    LEVERAGE: int = 1
-    POSITION_SIZE_PERCENT: float = 1
+    LEVERAGE: int = 5
+    POSITION_SIZE_PERCENT: float = 0.1
 
     # ATR Stop Loss
     ATR_LENGTH: int = 18

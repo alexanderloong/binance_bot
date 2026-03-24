@@ -168,7 +168,9 @@ def run_backtest():
         use_ema_filter=True,
         use_volume_filter=True,
         use_stoploss=True,
-        use_takeprofit=False
+        use_takeprofit=True,
+        use_breakeven=True,
+        use_htf_filter=True,
     )
 
     # Log results
