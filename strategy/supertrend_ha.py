@@ -2,15 +2,20 @@ import pandas as pd
 from strategy.base import BaseStrategy
 from indicators.heikin_ashi import calculate_heikin_ashi
 from indicators.supertrend import calculate_supertrend
+from indicators.atr import calculate_atr
 from config import settings
 
 class SupertrendHAStrategy(BaseStrategy):
-    def __init__(self, period=None, multiplier=None):
+    def __init__(self, period=None, multiplier=None, atr_period=None):
         super().__init__("Supertrend HA")
         self.period = period if period is not None else settings.SUPERTREND_PERIOD
         self.multiplier = multiplier if multiplier is not None else settings.SUPERTREND_MULTIPLIER
+        self.atr_period = atr_period if atr_period is not None else 14
 
     def generate_signals(self, df: pd.DataFrame) -> pd.DataFrame:
+        # Calculate ATR
+        df = calculate_atr(df, period=self.atr_period)
+        
         # Calculate HA candles
         df = calculate_heikin_ashi(df)
         

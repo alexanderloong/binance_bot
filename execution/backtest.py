@@ -25,16 +25,19 @@ class BacktestEngine(ExecutionEngine):
         initial_capital: float = 1000.0,
         maker_fee: float = 0.0002,
         taker_fee: float = 0.0005,
+        sl_atr_multiplier: float = 0.0,
     ):
         self.initial_capital = initial_capital
         self.capital = initial_capital
         self.risk_manager = RiskManager(initial_capital)
         self.maker_fee = maker_fee
         self.taker_fee = taker_fee
+        self.sl_atr_multiplier = sl_atr_multiplier
 
         self.position = 0  # 1 for Long, -1 for Short, 0 for flat
         self.entry_price = 0.0
         self.position_size = 0.0
+        self.sl_price = 0.0
 
         self.trades = []
         self.equity_curve = []
@@ -54,14 +57,22 @@ class BacktestEngine(ExecutionEngine):
                         current_open, timestamp=index, reason="Close Short"
                     )
                 if self.position == 0:
-                    self.execute_long(current_open, timestamp=index)
+                    self.execute_long(current_open, timestamp=index, current_atr=row.get("atr", 0))
             elif pending_signal == -1:
                 if self.position == 1:
                     self.close_position(
                         current_open, timestamp=index, reason="Close Long"
                     )
                 if self.position == 0:
-                    self.execute_short(current_open, timestamp=index)
+                    self.execute_short(current_open, timestamp=index, current_atr=row.get("atr", 0))
+
+            # SL Evaluation for current candle
+            if self.position == 1 and self.sl_atr_multiplier > 0:
+                if row["low"] <= self.sl_price:
+                    self.close_position(self.sl_price, timestamp=index, reason="SL Hit")
+            elif self.position == -1 and self.sl_atr_multiplier > 0:
+                if row["high"] >= self.sl_price:
+                    self.close_position(self.sl_price, timestamp=index, reason="SL Hit")
 
             # 2. Record Equity MTM
             unrealized_pnl = 0
@@ -93,9 +104,14 @@ class BacktestEngine(ExecutionEngine):
         fee = price * size * self.taker_fee
         self.capital -= fee
 
+        current_atr = kwargs.get("current_atr", 0)
         self.position = 1
         self.entry_price = price
         self.position_size = size
+        if self.sl_atr_multiplier > 0 and current_atr > 0:
+            self.sl_price = price - (current_atr * self.sl_atr_multiplier)
+        else:
+            self.sl_price = 0.0
 
         self.trades.append(
             {
@@ -114,9 +130,14 @@ class BacktestEngine(ExecutionEngine):
         fee = price * size * self.taker_fee
         self.capital -= fee
 
+        current_atr = kwargs.get("current_atr", 0)
         self.position = -1
         self.entry_price = price
         self.position_size = size
+        if self.sl_atr_multiplier > 0 and current_atr > 0:
+            self.sl_price = price + (current_atr * self.sl_atr_multiplier)
+        else:
+            self.sl_price = 0.0
 
         self.trades.append(
             {
