@@ -8,7 +8,7 @@ from execution.backtest import BacktestEngine
 def run_backtest():
     logger.info("=== Starting Backtest ===")
     provider = HistoricalDataProvider()
-    df = provider.get_historical_data(settings.SYMBOL, settings.TIMEFRAME, limit=1000)
+    df = provider.get_historical_data(settings.SYMBOL, settings.TIMEFRAME, limit=228000)
     
     strategy = SupertrendHAStrategy()
     df_signals = strategy.generate_signals(df)
