@@ -2,10 +2,9 @@ import numpy as np
 from base_optimizer import BaseOptimizer
 from module.backtest.orchestrator import simulate
 from module.bot.data_processor import DataProcessor
-from config import (
+from resource.config import (
     SUPERTREND_LENGTH,
     SUPERTREND_FACTOR,
-    VOLUME_MA_LENGTH,
 )
 
 
@@ -15,7 +14,7 @@ def run_simulation(ema_len, df_final):
     df_st = DataProcessor.calculate_ema(df_st, length=ema_len)
     df_st["EMA_FILTER"] = df_st[f"EMA_{ema_len}"]
 
-    res, _ = simulate(df_st, use_ema_filter=True, use_volume_filter=True)
+    res, _ = simulate(df_st, use_ema_filter=True, ema_length=ema_len)
 
     return {
         "ema_length": ema_len,
@@ -32,13 +31,13 @@ def run_optimization():
     optimizer = BaseOptimizer("EMA Length Optimization")
 
     print(
-        f"Fixed: SuperTrend Length={SUPERTREND_LENGTH}, SuperTrend Factor={SUPERTREND_FACTOR}, Vol MA={VOLUME_MA_LENGTH}"
+        f"Fixed: SuperTrend Length={SUPERTREND_LENGTH}, SuperTrend Factor={SUPERTREND_FACTOR}"
     )
 
     if not optimizer.load_and_prepare_data():
         return
 
-    ema_lengths = np.arange(90, 100, 1)
+    ema_lengths = np.arange(90, 95, 1)
     tasks = [(ema_len,) for ema_len in ema_lengths]
     results = optimizer.run_parallel(tasks, run_simulation)
     opt_df = optimizer.save_and_analyze(results, "optimization_results_ema.csv")

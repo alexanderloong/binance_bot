@@ -69,6 +69,7 @@ def simulate(
     sl_multiplier=ATR_MULTIPLIER,
     leverage=LEVERAGE,
     position_size_percent=POSITION_SIZE_PERCENT,
+    ema_length=EMA_LENGTH,
 ):
     sim = Simulator(
         timeframe=TIMEFRAME,
@@ -81,7 +82,7 @@ def simulate(
         leverage=leverage,
         position_size_percent=position_size_percent,
         commission_rate=TAKER_FEE_RATE,
-        ema_length=EMA_LENGTH,
+        ema_length=ema_length,
         use_htf_filter=use_htf_filter,
         use_breakeven=use_breakeven,
         breakeven_multiplier=breakeven_multiplier,
