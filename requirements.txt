@@ -1,5 +1,6 @@
-ccxt
 pandas
-python-dotenv
-schedule
 numpy
+python-binance
+pytz
+websockets
+python-dotenv
