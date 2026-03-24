@@ -2,7 +2,7 @@ import numpy as np
 from base_optimizer import BaseOptimizer
 from module.backtest.orchestrator import simulate
 from module.bot.data_processor import DataProcessor
-from config import SUPERTREND_LENGTH, SUPERTREND_FACTOR, EMA_LENGTH
+from resource.config import SUPERTREND_LENGTH, SUPERTREND_FACTOR, EMA_LENGTH
 
 
 def run_simulation(vol_len, df_final):
@@ -35,7 +35,7 @@ def run_optimization():
     if not optimizer.load_and_prepare_data():
         return
 
-    vol_lengths = np.arange(150, 180, 1)
+    vol_lengths = np.arange(65, 126, 1)
     print(f"Testing {len(vol_lengths)} Volume MA lengths...")
 
     tasks = [(vol_len,) for vol_len in vol_lengths]

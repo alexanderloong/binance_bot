@@ -48,7 +48,7 @@ class TradingConfig:
     CONSOLE_TRADE_LIMIT: int = 15
 
     # Volume
-    VOLUME_MA_LENGTH: int = 166
+    VOLUME_MA_LENGTH: int = 83
 
 
 # Instantiate global settings
