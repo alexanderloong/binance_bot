@@ -47,8 +47,10 @@ class BacktestEngine(ExecutionEngine):
             logger.info(f"Starting backtest with {self.initial_capital} USDT")
 
         pending_signal = 0
+        pending_atr = 0.0
         for index, row in df.iterrows():
             current_open = row["open"]
+            entered_this_candle = False
 
             # 1. Execute pending signal from previous candle at current OPEN
             if pending_signal == 1:
@@ -57,22 +59,33 @@ class BacktestEngine(ExecutionEngine):
                         current_open, timestamp=index, reason="Close Short"
                     )
                 if self.position == 0:
-                    self.execute_long(current_open, timestamp=index, current_atr=row.get("atr", 0))
+                    self.execute_long(
+                        current_open, timestamp=index, current_atr=pending_atr
+                    )
+                    entered_this_candle = True
             elif pending_signal == -1:
                 if self.position == 1:
                     self.close_position(
                         current_open, timestamp=index, reason="Close Long"
                     )
                 if self.position == 0:
-                    self.execute_short(current_open, timestamp=index, current_atr=row.get("atr", 0))
+                    self.execute_short(
+                        current_open, timestamp=index, current_atr=pending_atr
+                    )
+                    entered_this_candle = True
 
             # SL Evaluation for current candle
-            if self.position == 1 and self.sl_atr_multiplier > 0:
-                if row["low"] <= self.sl_price:
-                    self.close_position(self.sl_price, timestamp=index, reason="SL Hit")
-            elif self.position == -1 and self.sl_atr_multiplier > 0:
-                if row["high"] >= self.sl_price:
-                    self.close_position(self.sl_price, timestamp=index, reason="SL Hit")
+            if not entered_this_candle:
+                if self.position == 1 and self.sl_atr_multiplier > 0:
+                    if row["low"] <= self.sl_price:
+                        self.close_position(
+                            self.sl_price, timestamp=index, reason="SL Hit"
+                        )
+                elif self.position == -1 and self.sl_atr_multiplier > 0:
+                    if row["high"] >= self.sl_price:
+                        self.close_position(
+                            self.sl_price, timestamp=index, reason="SL Hit"
+                        )
 
             # 2. Record Equity MTM
             unrealized_pnl = 0
@@ -88,6 +101,7 @@ class BacktestEngine(ExecutionEngine):
             # 3. New signal generation at candle CLOSE
             # If the strategy has given a signal, it becomes pending for NEXT candle's open
             pending_signal = row.get("signal", 0)
+            pending_atr = row.get("atr", 0)
 
         if self.position != 0:
             last_idx = df.index[-1]

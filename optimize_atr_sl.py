@@ -65,7 +65,7 @@ def run_optimization():
     multipliers = [settings.SUPERTREND_MULTIPLIER]
 
     # Quét dải SL ATR Multiplier từ 0.0 đến 6.0 (bước nhảy 0.5)
-    atr_multipliers = [m / 10.0 for m in range(0, 50, 1)]
+    atr_multipliers = [m / 100.0 for m in range(0, 200, 10)]
 
     args_list = list(itertools.product(periods, multipliers, atr_multipliers))
     total_iterations = len(args_list)

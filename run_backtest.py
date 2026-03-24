@@ -11,10 +11,12 @@ def run_backtest():
     provider = HistoricalDataProvider()
     df = provider.get_historical_data(settings.SYMBOL, settings.TIMEFRAME, limit=70000)
 
-    strategy = SupertrendHAStrategy(atr_period=14)
+    strategy = SupertrendHAStrategy(atr_period=settings.ATR_PERIOD)
     df_signals = strategy.generate_signals(df)
 
-    engine = BacktestEngine(initial_capital=1000.0, sl_atr_multiplier=2.5)
+    engine = BacktestEngine(
+        initial_capital=1000.0, sl_atr_multiplier=settings.SL_ATR_MULTIPLIER
+    )
     engine.run(df_signals)
 
 
