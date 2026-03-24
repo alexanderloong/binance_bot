@@ -37,7 +37,7 @@ def run_optimization():
     if not optimizer.load_and_prepare_data():
         return
 
-    ema_lengths = np.arange(90, 95, 1)
+    ema_lengths = np.arange(70, 161, 1)
     tasks = [(ema_len,) for ema_len in ema_lengths]
     results = optimizer.run_parallel(tasks, run_simulation)
     opt_df = optimizer.save_and_analyze(results, "optimization_results_ema.csv")

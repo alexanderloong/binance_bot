@@ -28,7 +28,7 @@ from module.backtest.data_loader import BacktestDataLoader
 from module.backtest.simulator import Simulator
 from module.backtest.reporter import BacktestReporter
 
-LIMIT = 100000  # Candles for long-term backtest (performance stats)
+LIMIT = 200000  # Candles for long-term backtest (performance stats)
 WORKERS = 5
 SLEEP = 1.5
 GEN_CHART = True
