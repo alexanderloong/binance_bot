@@ -9,7 +9,7 @@ def get_expiration_seconds(timeframe: str) -> int:
         unit = timeframe[-1]
         value = int(timeframe[:-1])
         if unit == 'm':
-            return value * 60
+            return value * 60 * 1000 # Extended to bypass ban
         elif unit == 'h':
             return value * 3600
         elif unit == 'd':

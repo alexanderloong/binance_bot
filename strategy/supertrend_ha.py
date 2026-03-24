@@ -5,10 +5,10 @@ from indicators.supertrend import calculate_supertrend
 from config import settings
 
 class SupertrendHAStrategy(BaseStrategy):
-    def __init__(self):
+    def __init__(self, period=None, multiplier=None):
         super().__init__("Supertrend HA")
-        self.period = settings.SUPERTREND_PERIOD
-        self.multiplier = settings.SUPERTREND_MULTIPLIER
+        self.period = period if period is not None else settings.SUPERTREND_PERIOD
+        self.multiplier = multiplier if multiplier is not None else settings.SUPERTREND_MULTIPLIER
 
     def generate_signals(self, df: pd.DataFrame) -> pd.DataFrame:
         # Calculate HA candles

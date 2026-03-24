@@ -1,7 +1,14 @@
 import pandas as pd
+import numpy as np
 from execution.engine import ExecutionEngine
 from execution.risk_manager import RiskManager
 from core.logger import logger
+from core.trading_metrics import (
+    sharpe_ratio, sortino_ratio, calmar_ratio, profit_factor,
+    max_drawdown, max_drawdown_duration, value_at_risk,
+    win_rate, avg_win_loss_ratio, expectancy, consecutive_losses,
+    score_bot
+)
 
 class BacktestEngine(ExecutionEngine):
     def __init__(self, initial_capital: float = 1000.0, maker_fee: float = 0.0002, taker_fee: float = 0.0004):
@@ -18,8 +25,9 @@ class BacktestEngine(ExecutionEngine):
         self.trades = []
         self.equity_curve = []
         
-    def run(self, df: pd.DataFrame):
-        logger.info(f"Starting backtest with {self.initial_capital} USDT")
+    def run(self, df: pd.DataFrame, silent=False):
+        if not silent:
+            logger.info(f"Starting backtest with {self.initial_capital} USDT")
         
         pending_signal = 0
         for index, row in df.iterrows():
@@ -58,7 +66,7 @@ class BacktestEngine(ExecutionEngine):
             last_price = df['close'].iloc[-1]
             self.close_position(last_price, timestamp=last_idx, reason="End of Backtest")
             
-        self.generate_report()
+        self.generate_report(silent=silent)
             
     def execute_long(self, price: float, **kwargs):
         timestamp = kwargs.get('timestamp')
@@ -125,32 +133,59 @@ class BacktestEngine(ExecutionEngine):
         self.entry_price = 0
         self.position_size = 0
         
-    def generate_report(self):
+    def generate_report(self, silent=False):
         trades_df = pd.DataFrame(self.trades)
         close_trades = trades_df[trades_df['action'] == 'CLOSE']
         
         if len(close_trades) == 0:
-            logger.info("No trades were closed during the backtest.")
+            if not silent:
+                logger.info("No trades were closed during the backtest.")
             return
             
-        total_pnl = close_trades['pnl'].sum()
-        win_trades = close_trades[close_trades['pnl'] > 0]
-        
-        winrate = len(win_trades) / len(close_trades) * 100 if len(close_trades) > 0 else 0
-        
+        trades_pnl = close_trades['pnl'].tolist()
         equity_df = pd.DataFrame(self.equity_curve)
-        peak = equity_df['equity'].cummax()
-        drawdown = (equity_df['equity'] - peak) / peak * 100
-        max_drawdown = drawdown.min()
+        equity_curve_list = equity_df['equity'].tolist()
         
-        logger.info("=== BACKTEST REPORT ===")
-        logger.info(f"Initial Capital: {self.initial_capital:.2f} USDT")
-        logger.info(f"Final Capital: {self.capital:.2f} USDT")
-        logger.info(f"Total PnL: {total_pnl:.2f} USDT ({(self.capital/self.initial_capital - 1)*100:.2f}%)")
-        logger.info(f"Total Trades: {len(close_trades)}")
-        logger.info(f"Winrate: {winrate:.2f}%")
-        logger.info(f"Max Drawdown: {max_drawdown:.2f}%")
-        logger.info("=======================")
+        # Tính returns theo từng kỳ (kỳ ở đây là mỗi thay đổi trên equity curve hoặc mỗi candle)
+        returns = equity_df['equity'].pct_change().fillna(0).tolist()
+        
+        # Lấy điểm số từ trading_metrics
+        bot_scores = score_bot(returns, trades_pnl, equity_curve_list)
+        
+        total_pnl = close_trades['pnl'].sum()
+        
+        if silent:
+            return
+            
+        print("\n=== BACKTEST REPORT ===")
+        print(f"Initial Capital: {self.initial_capital:.2f} USDT")
+        print(f"Final Capital:   {self.capital:.2f} USDT")
+        print(f"Total PnL:       {total_pnl:.2f} USDT ({(self.capital/self.initial_capital - 1)*100:.2f}%)")
+        print(f"Total Trades:    {len(close_trades)}")
+        print("-----------------------")
+        print("[Nhóm 1] Lợi nhuận:")
+        print(f"  - Sharpe Ratio:  {sharpe_ratio(returns):.4f}")
+        print(f"  - Sortino Ratio: {sortino_ratio(returns):.4f}")
+        print(f"  - Calmar Ratio:  {calmar_ratio(returns):.4f}")
+        print(f"  - Profit Factor: {profit_factor(trades_pnl):.4f}")
+        print("-----------------------")
+        print("[Nhóm 2] Rủi ro:")
+        print(f"  - Max Drawdown:          {max_drawdown(equity_curve_list)*100:.2f}%")
+        print(f"  - Max Drawdown Duration: {max_drawdown_duration(equity_curve_list)} periods")
+        print(f"  - VaR (95%):             {value_at_risk(returns)*100:.4f}%")
+        print("-----------------------")
+        print("[Nhóm 3] Chất lượng lệnh:")
+        print(f"  - Win Rate:           {win_rate(trades_pnl)*100:.2f}%")
+        print(f"  - Avg Win/Loss Ratio: {avg_win_loss_ratio(trades_pnl):.2f}")
+        print(f"  - Expectancy:         {expectancy(trades_pnl):.2f} USDT")
+        print(f"  - Consecutive Losses: {consecutive_losses(trades_pnl)}")
+        print("-----------------------")
+        print("[Nhóm 4] Tổng điểm (BOT SCORE):")
+        print(f"  - Profitability Score: {bot_scores['profitability_score']}/100")
+        print(f"  - Risk Score:          {bot_scores['risk_score']}/100")
+        print(f"  - Trade Quality Score: {bot_scores['trade_quality_score']}/100")
+        print(f"  => TOTAL SCORE:        {bot_scores['total_score']}/100")
+        print("=======================\n")
         print("=== LAST 10 TRADES ===")
         paired_trades = []
         open_trade = None
