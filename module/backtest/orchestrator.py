@@ -28,7 +28,7 @@ from module.backtest.data_loader import BacktestDataLoader
 from module.backtest.simulator import Simulator
 from module.backtest.reporter import BacktestReporter
 
-LIMIT = 228000  # Candles for long-term backtest (performance stats)
+LIMIT = 150000  # Candles for long-term backtest (performance stats)
 WORKERS = 5
 SLEEP = 1.5
 GEN_CHART = True
@@ -167,10 +167,8 @@ def run_backtest():
         df_final,
         use_ema_filter=True,
         use_volume_filter=True,
-        use_htf_filter=False,
-        use_breakeven=False,
         use_stoploss=True,
-        use_takeprofit=False,
+        use_takeprofit=False
     )
 
     # Log results
