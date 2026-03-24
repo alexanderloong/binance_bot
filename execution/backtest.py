@@ -151,7 +151,7 @@ class BacktestEngine(ExecutionEngine):
         logger.info(f"Winrate: {winrate:.2f}%")
         logger.info(f"Max Drawdown: {max_drawdown:.2f}%")
         logger.info("=======================")
-        logger.info("=== LAST 10 TRADES ===")
+        print("=== LAST 10 TRADES ===")
         paired_trades = []
         open_trade = None
         for t in self.trades:
@@ -174,6 +174,6 @@ class BacktestEngine(ExecutionEngine):
         for pt in last_10:
             t_in = pt['entry_time'].strftime('%m-%d %H:%M') if hasattr(pt['entry_time'], 'strftime') else str(pt['entry_time'])[:16]
             if pt['exit_time'] == 'OPEN':
-                logger.info(f"[{t_in}] OPEN {pt['direction'][:1]} @ {pt['entry_price']:.1f}")
+                print(f"[{t_in}] OPEN {pt['direction'][:1]} @ {pt['entry_price']:.1f}")
             else:
-                logger.info(f"[{t_in}] {pt['direction'][:1]} {pt['entry_price']:.1f} -> {pt['exit_price']:.1f} | PnL: {pt['pnl']:.2f}U")
+                print(f"[{t_in}] {pt['direction'][:1]} {pt['entry_price']:.1f} -> {pt['exit_price']:.1f} | PnL: {pt['pnl']:.2f}U")
