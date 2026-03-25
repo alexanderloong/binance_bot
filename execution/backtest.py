@@ -3,20 +3,7 @@ import numpy as np
 from execution.engine import ExecutionEngine
 from execution.risk_manager import RiskManager
 from core.logger import logger
-from core.trading_metrics import (
-    sharpe_ratio,
-    sortino_ratio,
-    calmar_ratio,
-    profit_factor,
-    max_drawdown,
-    max_drawdown_duration,
-    value_at_risk,
-    win_rate,
-    avg_win_loss_ratio,
-    expectancy,
-    consecutive_losses,
-    score_bot,
-)
+from execution.reporter import BacktestReporter
 
 
 class BacktestEngine(ExecutionEngine):
@@ -59,87 +46,12 @@ class BacktestEngine(ExecutionEngine):
         for index, row in df.iterrows():
             current_open = row["open"]
             current_atr = row.get("atr", 0.0)
-            entered_this_candle = False
 
-            # 1. Execute pending signal from previous candle at current OPEN
-            if pending_signal == 1:
-                if self.position == -1:
-                    self.close_position(
-                        current_open, timestamp=index, reason="Close Short"
-                    )
-                if self.position == 0:
-                    self.execute_long(
-                        current_open, timestamp=index, current_atr=pending_atr
-                    )
-                    entered_this_candle = True
-            elif pending_signal == -1:
-                if self.position == 1:
-                    self.close_position(
-                        current_open, timestamp=index, reason="Close Long"
-                    )
-                if self.position == 0:
-                    self.execute_short(
-                        current_open, timestamp=index, current_atr=pending_atr
-                    )
-                    entered_this_candle = True
-            elif pending_signal == 2:
-                if self.position == -1:
-                    self.close_position(
-                        current_open, timestamp=index, reason="Close Short (EMA block)"
-                    )
-            elif pending_signal == -2:
-                if self.position == 1:
-                    self.close_position(
-                        current_open, timestamp=index, reason="Close Long (EMA block)"
-                    )
-                    
-            # Trailing Stop dynamic adjustment
-            if self.position == 1:
-                if row["high"] > self.peak_price:
-                    self.peak_price = row["high"]
-                if self.use_ts and self.initial_sl_price > 0:
-                    activation_pnl_distance = (self.entry_price - self.initial_sl_price) * self.ts_activation_rr
-                    if (self.peak_price - self.entry_price) >= activation_pnl_distance:
-                        new_sl = self.peak_price - (current_atr * self.ts_distance_atr)
-                        if new_sl > self.sl_price:
-                            self.sl_price = new_sl
-            elif self.position == -1:
-                if row["low"] < self.peak_price:
-                    self.peak_price = row["low"]
-                if self.use_ts and self.initial_sl_price > 0:
-                    activation_pnl_distance = (self.initial_sl_price - self.entry_price) * self.ts_activation_rr
-                    if (self.entry_price - self.peak_price) >= activation_pnl_distance:
-                        new_sl = self.peak_price + (current_atr * self.ts_distance_atr)
-                        if new_sl < self.sl_price:
-                            self.sl_price = new_sl
+            self._process_pending_signal(pending_signal, current_open, index, pending_atr)
+            self._evaluate_trailing_stop(row, current_atr)
+            self._evaluate_stop_loss(row, index)
+            self._record_equity(row, index)
 
-            # SL Evaluation for current candle (based on CLOSE price)
-            if self.position == 1 and self.sl_atr_multiplier > 0:
-                if row["close"] <= self.sl_price:
-                    reason = "Trailing SL Hit" if self.sl_price > self.initial_sl_price else "SL Hit (Close)"
-                    self.close_position(
-                        row["close"], timestamp=index, reason=reason
-                    )
-            elif self.position == -1 and self.sl_atr_multiplier > 0:
-                if row["close"] >= self.sl_price:
-                    reason = "Trailing SL Hit" if self.sl_price < self.initial_sl_price else "SL Hit (Close)"
-                    self.close_position(
-                        row["close"], timestamp=index, reason=reason
-                    )
-
-            # 2. Record Equity MTM
-            unrealized_pnl = 0
-            if self.position == 1:
-                unrealized_pnl = (row["close"] - self.entry_price) * self.position_size - self.entry_fee
-            elif self.position == -1:
-                unrealized_pnl = (self.entry_price - row["close"]) * self.position_size - self.entry_fee
-
-            self.equity_curve.append(
-                {"timestamp": index, "equity": self.capital + unrealized_pnl}
-            )
-
-            # 3. New signal generation at candle CLOSE
-            # If the strategy has given a signal, it becomes pending for NEXT candle's open
             pending_signal = row.get("signal", 0)
             pending_atr = row.get("atr", 0)
 
@@ -151,6 +63,65 @@ class BacktestEngine(ExecutionEngine):
             )
 
         self.generate_report(silent=silent)
+
+    def _process_pending_signal(self, pending_signal, current_open, index, pending_atr):
+        if pending_signal == 1:
+            if self.position == -1:
+                self.close_position(current_open, timestamp=index, reason="Close Short")
+            if self.position == 0:
+                self.execute_long(current_open, timestamp=index, current_atr=pending_atr)
+        elif pending_signal == -1:
+            if self.position == 1:
+                self.close_position(current_open, timestamp=index, reason="Close Long")
+            if self.position == 0:
+                self.execute_short(current_open, timestamp=index, current_atr=pending_atr)
+        elif pending_signal == 2:
+            if self.position == -1:
+                self.close_position(current_open, timestamp=index, reason="Close Short (EMA block)")
+        elif pending_signal == -2:
+            if self.position == 1:
+                self.close_position(current_open, timestamp=index, reason="Close Long (EMA block)")
+
+    def _evaluate_trailing_stop(self, row, current_atr):
+        if self.position == 1:
+            if row["high"] > self.peak_price:
+                self.peak_price = row["high"]
+            if self.use_ts and self.initial_sl_price > 0:
+                activation_pnl_distance = (self.entry_price - self.initial_sl_price) * self.ts_activation_rr
+                if (self.peak_price - self.entry_price) >= activation_pnl_distance:
+                    new_sl = self.peak_price - (current_atr * self.ts_distance_atr)
+                    if new_sl > self.sl_price:
+                        self.sl_price = new_sl
+        elif self.position == -1:
+            if row["low"] < self.peak_price:
+                self.peak_price = row["low"]
+            if self.use_ts and self.initial_sl_price > 0:
+                activation_pnl_distance = (self.initial_sl_price - self.entry_price) * self.ts_activation_rr
+                if (self.entry_price - self.peak_price) >= activation_pnl_distance:
+                    new_sl = self.peak_price + (current_atr * self.ts_distance_atr)
+                    if new_sl < self.sl_price:
+                        self.sl_price = new_sl
+
+    def _evaluate_stop_loss(self, row, index):
+        if self.position == 1 and self.sl_atr_multiplier > 0:
+            if row["close"] <= self.sl_price:
+                reason = "Trailing SL Hit" if self.sl_price > self.initial_sl_price else "SL Hit (Close)"
+                self.close_position(row["close"], timestamp=index, reason=reason)
+        elif self.position == -1 and self.sl_atr_multiplier > 0:
+            if row["close"] >= self.sl_price:
+                reason = "Trailing SL Hit" if self.sl_price < self.initial_sl_price else "SL Hit (Close)"
+                self.close_position(row["close"], timestamp=index, reason=reason)
+
+    def _record_equity(self, row, index):
+        unrealized_pnl = 0
+        if self.position == 1:
+            unrealized_pnl = (row["close"] - self.entry_price) * self.position_size - self.entry_fee
+        elif self.position == -1:
+            unrealized_pnl = (self.entry_price - row["close"]) * self.position_size - self.entry_fee
+
+        self.equity_curve.append(
+            {"timestamp": index, "equity": self.capital + unrealized_pnl}
+        )
 
     def execute_long(self, price: float, **kwargs):
         timestamp = kwargs.get("timestamp")
@@ -250,104 +221,10 @@ class BacktestEngine(ExecutionEngine):
         self.peak_price = 0.0
 
     def generate_report(self, silent=False):
-        trades_df = pd.DataFrame(self.trades)
-        close_trades = trades_df[trades_df["action"] == "CLOSE"]
-
-        if len(close_trades) == 0:
-            if not silent:
-                logger.info("No trades were closed during the backtest.")
-            return
-
-        trades_pnl = close_trades["pnl"].tolist()
-        equity_df = pd.DataFrame(self.equity_curve)
-        equity_curve_list = equity_df["equity"].tolist()
-
-        # Tính returns theo từng kỳ (kỳ ở đây là mỗi thay đổi trên equity curve hoặc mỗi candle)
-        returns = equity_df["equity"].pct_change().fillna(0).tolist()
-
-        # Lấy điểm số từ trading_metrics
-        bot_scores = score_bot(returns, trades_pnl, equity_curve_list)
-
-        total_pnl = close_trades["pnl"].sum()
-        
-        try:
-            start_time = pd.to_datetime(equity_df["timestamp"].iloc[0])
-            end_time = pd.to_datetime(equity_df["timestamp"].iloc[-1])
-            days = (end_time - start_time).total_seconds() / 86400.0
-            days = max(days, 1)
-        except Exception:
-            days = 1
-            
-        avg_trades_per_day = len(close_trades) / days
-
-        if silent:
-            return
-
-        print("\n=== BACKTEST REPORT ===")
-        print(f"Initial Capital: {self.initial_capital:.2f} USDT")
-        print(f"Final Capital:   {self.capital:.2f} USDT")
-        print(
-            f"Total PnL:       {total_pnl:.2f} USDT ({(self.capital/self.initial_capital - 1)*100:.2f}%)"
+        BacktestReporter.generate_report(
+            initial_capital=self.initial_capital,
+            final_capital=self.capital,
+            trades=self.trades,
+            equity_curve=self.equity_curve,
+            silent=silent
         )
-        print(f"Total Trades:    {len(close_trades)}")
-        print("-----------------------")
-        print("[Nhóm 1] Lợi nhuận:")
-        print(f"  - Sharpe Ratio:  {sharpe_ratio(returns):.4f}")
-        print(f"  - Sortino Ratio: {sortino_ratio(returns):.4f}")
-        print(f"  - Calmar Ratio:  {calmar_ratio(returns):.4f}")
-        print(f"  - Profit Factor: {profit_factor(trades_pnl):.4f}")
-        print("-----------------------")
-        print("[Nhóm 2] Rủi ro:")
-        print(f"  - Max Drawdown:          {max_drawdown(equity_curve_list)*100:.2f}%")
-        print(
-            f"  - Max Drawdown Duration: {max_drawdown_duration(equity_curve_list)} periods"
-        )
-        print(f"  - VaR (95%):             {value_at_risk(returns)*100:.4f}%")
-        print("-----------------------")
-        print("[Nhóm 3] Chất lượng lệnh:")
-        print(f"  - Win Rate:           {win_rate(trades_pnl)*100:.2f}%")
-        print(f"  - Avg Win/Loss Ratio: {avg_win_loss_ratio(trades_pnl):.2f}")
-        print(f"  - Expectancy:         {expectancy(trades_pnl):.2f} USDT")
-        print(f"  - Consecutive Losses: {consecutive_losses(trades_pnl)}")
-        print(f"  - Avg Trades/Day:     {avg_trades_per_day:.2f}")
-        print("-----------------------")
-        print("[Nhóm 4] Tổng điểm (BOT SCORE):")
-        print(f"  - Profitability Score: {bot_scores['profitability_score']:.4f}/100")
-        print(f"  - Risk Score:          {bot_scores['risk_score']:.4f}/100")
-        print(f"  - Trade Quality Score: {bot_scores['trade_quality_score']:.4f}/100")
-        print(f"  => TOTAL SCORE:        {bot_scores['total_score']:.4f}/100")
-        print("=======================\n")
-        print("=== LAST 10 TRADES ===")
-        paired_trades = []
-        open_trade = None
-        for t in self.trades:
-            if t["action"] in ["LONG", "SHORT"]:
-                open_trade = t
-            elif t["action"] == "CLOSE" and open_trade:
-                paired_trades.append(
-                    {
-                        "entry_time": open_trade["timestamp"],
-                        "exit_time": t["timestamp"],
-                        "direction": open_trade["action"],
-                        "entry_price": open_trade["price"],
-                        "exit_price": t["price"],
-                        "size": t["size"],
-                        "pnl": t["pnl"],
-                        "reason": t.get("reason", ""),
-                    }
-                )
-                open_trade = None
-
-        last_10 = paired_trades[-10:] if len(paired_trades) >= 10 else paired_trades
-        for pt in last_10:
-            t_in = (
-                pt["entry_time"].strftime("%m-%d %H:%M")
-                if hasattr(pt["entry_time"], "strftime")
-                else str(pt["entry_time"])[:16]
-            )
-            if pt["exit_time"] == "OPEN":
-                print(f"[{t_in}] OPEN {pt['direction'][:1]} @ {pt['entry_price']:.1f}")
-            else:
-                print(
-                    f"[{t_in}] {pt['direction'][:1]} {pt['entry_price']:.1f} -> {pt['exit_price']:.1f} | PnL: {pt['pnl']:.2f}U"
-                )

@@ -5,18 +5,18 @@ import pandas as pd
 # NHÓM 1: LỢI NHUẬN
 # ==============================================================================
 
-def sharpe_ratio(returns, risk_free=0.02):
-    """Tính Sharpe Ratio. Giả định biến returns và risk_free đã cùng khung thời gian."""
+def sharpe_ratio(returns, risk_free=0.0, periods_per_year=35040):
+    """Tính Annualized Sharpe Ratio. Mặc định periods_per_year = 35040 cho nến 15m."""
     if len(returns) == 0:
         return 0.0
     mean_return = np.mean(returns)
     std_return = np.std(returns)
     if std_return == 0:
         return 0.0
-    return (mean_return - risk_free) / std_return
+    return np.sqrt(periods_per_year) * (mean_return - risk_free) / std_return
 
-def sortino_ratio(returns, risk_free=0.02):
-    """Tính Sortino Ratio."""
+def sortino_ratio(returns, risk_free=0.0, periods_per_year=35040):
+    """Tính Annualized Sortino Ratio. Mặc định periods_per_year = 35040 cho nến 15m."""
     if len(returns) == 0:
         return 0.0
     mean_return = np.mean(returns)
@@ -24,7 +24,7 @@ def sortino_ratio(returns, risk_free=0.02):
     downside_std = np.std(negative_returns) if len(negative_returns) > 0 else 0.0
     if downside_std == 0:
         return 0.0
-    return (mean_return - risk_free) / downside_std
+    return np.sqrt(periods_per_year) * (mean_return - risk_free) / downside_std
 
 def calmar_ratio(returns):
     """Tính Calmar Ratio = Tỷ suất sinh lời / Max Drawdown."""
@@ -148,7 +148,9 @@ def consecutive_losses(trades_pnl):
 def score_bot(returns, trades_pnl, equity_curve):
     """
     Trả về dictionary điểm 0-100 cho từng nhóm và tổng điểm (Total Score).
-    Điểm số được heuristic (nội suy 0-100) dựa trên các chỉ số tài chính thông dụng.
+    Điểm số được hiệu chỉnh phù hợp với thị trường Crypto:
+    - Drawdown được nới lỏng mức phạt (tới 60% mới 0 điểm, vì crypto biến động mạnh).
+    - Lợi nhuận đánh giá dựa trên Profit Factor và tỷ suất sinh lời (ROI) của tổng PnL thay vì Sharpe theo từng nến.
     """
     if not isinstance(returns, (list, np.ndarray, pd.Series)):
         returns = np.array(returns)
@@ -157,36 +159,41 @@ def score_bot(returns, trades_pnl, equity_curve):
     if not isinstance(equity_curve, (list, np.ndarray, pd.Series)):
         equity_curve = np.array(equity_curve)
         
-    # Lấy các chỉ số đại diện
-    sr = sharpe_ratio(returns, risk_free=0.0)
     pf = profit_factor(trades_pnl)
     md = max_drawdown(equity_curve)
     wr = win_rate(trades_pnl)
     awlr = avg_win_loss_ratio(trades_pnl)
     
+    initial_cap = equity_curve[0] if len(equity_curve) > 0 else 1000
+    final_cap = equity_curve[-1] if len(equity_curve) > 0 else initial_cap
+    roi = (final_cap - initial_cap) / initial_cap if initial_cap > 0 else 0
+    
     # 1. Điểm Lợi nhuận (Tối đa 100)
-    # Sharpe = 2.0 -> 50 điểm, Profit Factor = 2.5 -> 50 điểm
+    # 50% dựa trên Profit Factor (1.0 -> 0đ, 2.0 -> 50đ)
+    # 50% dựa trên ROI (0% -> 0đ, 100% (x2 tài khoản) -> 50đ)
     score_profit = 0.0
-    if sr > 0:
-        score_profit += min((sr / 2.0) * 50, 50)
     if pf != float('inf') and pf > 1.0:
-        score_profit += min(((pf - 1.0) / 1.5) * 50, 50)
+        score_profit += min(((pf - 1.0) / 1.0) * 50, 50)
     elif pf == float('inf'):
         score_profit += 50
+    
+    if roi > 0:
+        score_profit += min((roi / 1.0) * 50, 50)
+        
     score_profit = max(0.0, min(100.0, score_profit))
 
     # 2. Điểm Rủi ro (Tối đa 100) 
-    # MD < 5% -> 100, MD > 30% -> 0
-    if md <= 0.05:
+    # MD <= 10% -> 100, MD >= 60% -> 0
+    if md <= 0.10:
         score_risk = 100.0
-    elif md >= 0.30:
+    elif md >= 0.60:
         score_risk = 0.0
     else:
-        score_risk = 100.0 - ((md - 0.05) / 0.25) * 100.0
+        score_risk = 100.0 - ((md - 0.10) / 0.50) * 100.0
     score_risk = max(0.0, min(100.0, score_risk))
     
     # 3. Điểm Chất lượng lệnh (Tối đa 100)
-    # Win rate 60% -> 50 điểm, RL 2.0 -> 50 điểm
+    # Win rate 60% -> 50 điểm, R:R 2.0 -> 50 điểm
     score_tq = 0.0
     score_tq += min((wr / 0.6) * 50, 50)
     if awlr != float('inf') and awlr > 0:
