@@ -1,3 +1,8 @@
+import os
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 import pandas as pd
 from data.historical import HistoricalDataProvider
 from strategy.supertrend_ha import SupertrendHAStrategy
@@ -7,17 +12,20 @@ from config import settings
 import itertools
 from core.logger import logger
 import logging
+import sys
+import os
 import multiprocessing as mp
 import concurrent.futures
 
 
 def evaluate_params(args):
-    p, m, atr_m, df = args
+    p, m, df = args
+
     try:
-        strategy = SupertrendHAStrategy(period=p, multiplier=m, atr_period=14)
+        strategy = SupertrendHAStrategy(period=p, multiplier=m)
         df_signals = strategy.generate_signals(df.copy())
 
-        engine = BacktestEngine(initial_capital=1000.0, sl_atr_multiplier=atr_m)
+        engine = BacktestEngine(initial_capital=1000.0)
         engine.run(df_signals, silent=True)
 
         trades_df = pd.DataFrame(engine.trades)
@@ -42,32 +50,23 @@ def evaluate_params(args):
     except Exception as e:
         total_score = -1
         total_pnl = 0
-        print(f"\n[Worker Error on p={p}, m={m}, atr_m={atr_m}]: {str(e)}")
+        print(f"\n[Worker Error on p={p}, m={m}]: {str(e)}")
 
-    return {
-        "period": p,
-        "multiplier": m,
-        "atr_m": atr_m,
-        "total_score": total_score,
-        "pnl": total_pnl,
-    }
+    return {"period": p, "multiplier": m, "total_score": total_score, "pnl": total_pnl}
 
 
 def run_optimization():
     logger.setLevel(logging.WARNING)
+    print("Setting up grid search parameters...")
+
     print("Fetching historical data...")
     provider = HistoricalDataProvider()
     df = provider.get_historical_data(settings.SYMBOL, settings.TIMEFRAME, limit=70000)
 
-    # Grid search boundaries
-    # Cố định tham số Supertrend theo settings cấu hình sẵn
-    periods = [settings.SUPERTREND_PERIOD]
-    multipliers = [settings.SUPERTREND_MULTIPLIER]
+    periods = range(6, 9, 1)
+    multipliers = [m / 10.0 for m in range(10, 30, 1)]
 
-    # Quét dải SL ATR Multiplier từ 0.0 đến 6.0 (bước nhảy 0.5)
-    atr_multipliers = [m / 100.0 for m in range(0, 200, 10)]
-
-    args_list = list(itertools.product(periods, multipliers, atr_multipliers))
+    args_list = list(itertools.product(periods, multipliers))
     total_iterations = len(args_list)
     print(
         f"Starting search across {total_iterations} combinations using {mp.cpu_count()} processes...\n"
@@ -79,9 +78,10 @@ def run_optimization():
     completed = 0
 
     with concurrent.futures.ProcessPoolExecutor(max_workers=mp.cpu_count()) as executor:
+        # map guarantees order but we just need results as they complete.
+        # Actually, using as_completed is better for immediate unordered printing.
         future_to_args = {
-            executor.submit(evaluate_params, (p, m, atr_m, df)): (p, m, atr_m)
-            for p, m, atr_m in args_list
+            executor.submit(evaluate_params, (p, m, df)): (p, m) for p, m in args_list
         }
         for future in concurrent.futures.as_completed(future_to_args):
             result = future.result()
@@ -89,38 +89,36 @@ def run_optimization():
             completed += 1
             p = result["period"]
             m = result["multiplier"]
-            atr_m = result["atr_m"]
             total_score = result["total_score"]
             total_pnl = result["pnl"]
 
             print(
-                f"\rProgress: {completed}/{total_iterations} | Tested P={p}, M={m}, ATR_M={atr_m}...",
+                f"\rProgress: {completed}/{total_iterations} | Tested P={p}, M={m}...",
                 end="",
                 flush=True,
             )
 
             if total_score > best_score:
                 best_score = total_score
-                best_params = (p, m, atr_m)
+                best_params = (p, m)
                 print(
-                    f"\n>>> NEW BEST FOUND -> Period: {p}, Multiplier: {m}, SL ATR: {atr_m} | Score: {total_score}/100 | PnL: {total_pnl:.2f} USDT"
+                    f"\n>>> NEW BEST FOUND -> Period: {p}, Multiplier: {m} | Score: {total_score}/100 | PnL: {total_pnl:.2f} USDT"
                 )
 
     print("\n" + "=" * 40)
     print("=> OPTIMIZATION RESULT")
     print("=" * 40)
+
     if best_params:
         print(f"Best Period:                           {best_params[0]}")
         print(f"Best Multiplier:                       {best_params[1]}")
-        print(f"Best SL ATR Multiplier:                {best_params[2]}")
         print(f"Best Total Score:                      {best_score}/100")
+
         best_result = next(
             (
                 r
                 for r in results
-                if r["period"] == best_params[0]
-                and r["multiplier"] == best_params[1]
-                and r["atr_m"] == best_params[2]
+                if r["period"] == best_params[0] and r["multiplier"] == best_params[1]
             ),
             None,
         )
@@ -129,7 +127,7 @@ def run_optimization():
                 f"Total PnL of best config:              {best_result['pnl']:.2f} USDT"
             )
     else:
-        print("Optimization failed.")
+        print("Quá trình chạy bị lỗi. Không tìm thấy thông số nào.")
 
 
 if __name__ == "__main__":
