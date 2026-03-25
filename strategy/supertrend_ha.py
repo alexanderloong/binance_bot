@@ -8,16 +8,26 @@ from indicators.adx import calculate_adx
 from config import settings
 
 class SupertrendHAStrategy(BaseStrategy):
-    def __init__(self, period=None, multiplier=None, atr_period=None, ema_period=None, use_ema=None):
+    def __init__(
+        self, 
+        period=None, 
+        multiplier=None, 
+        atr_period=None, 
+        ema_period=None, 
+        use_ema=None,
+        use_adx=None,
+        adx_period=None,
+        adx_threshold=None
+    ):
         super().__init__("Supertrend HA")
         self.period = period if period is not None else settings.SUPERTREND_PERIOD
         self.multiplier = multiplier if multiplier is not None else settings.SUPERTREND_MULTIPLIER
         self.atr_period = atr_period if atr_period is not None else settings.ATR_PERIOD
         self.ema_period = ema_period if ema_period is not None else settings.EMA_PERIOD
         self.use_ema = use_ema if use_ema is not None else getattr(settings, 'USE_EMA', True)
-        self.use_adx = getattr(settings, 'USE_ADX', True)
-        self.adx_period = getattr(settings, 'ADX_PERIOD', 14)
-        self.adx_threshold = getattr(settings, 'ADX_THRESHOLD', 20)
+        self.use_adx = use_adx if use_adx is not None else getattr(settings, 'USE_ADX', True)
+        self.adx_period = adx_period if adx_period is not None else getattr(settings, 'ADX_PERIOD', 14)
+        self.adx_threshold = adx_threshold if adx_threshold is not None else getattr(settings, 'ADX_THRESHOLD', 20)
 
     def generate_signals(self, df: pd.DataFrame) -> pd.DataFrame:
         # Calculate ATR
