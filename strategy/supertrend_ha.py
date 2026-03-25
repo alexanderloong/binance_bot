@@ -4,6 +4,8 @@ from indicators.heikin_ashi import calculate_heikin_ashi
 from indicators.supertrend import calculate_supertrend
 from indicators.atr import calculate_atr
 from indicators.ema import calculate_ema
+from indicators.volume import calculate_volume_ma
+from indicators.htf_ema import calculate_htf_ema
 from config import settings
 
 class SupertrendHAStrategy(BaseStrategy):
@@ -22,10 +24,14 @@ class SupertrendHAStrategy(BaseStrategy):
         self.ema_period = ema_period if ema_period is not None else settings.EMA_PERIOD
         self.use_ema = use_ema if use_ema is not None else getattr(settings, 'USE_EMA', True)
         
-        # HTF EMA settings
         self.use_htf_ema = getattr(settings, 'USE_HTF_EMA', False)
         self.htf_ema_timeframe = getattr(settings, 'HTF_EMA_TIMEFRAME', '1H')
         self.htf_ema_period = getattr(settings, 'HTF_EMA_PERIOD', 50)
+
+        # Volume Filter settings
+        self.use_volume_filter = getattr(settings, 'USE_VOLUME_FILTER', False)
+        self.volume_ma_period = getattr(settings, 'VOLUME_MA_PERIOD', 20)
+        self.volume_threshold = getattr(settings, 'VOLUME_THRESHOLD', 1.5)
 
     def generate_signals(self, df: pd.DataFrame) -> pd.DataFrame:
         # Calculate ATR
@@ -36,31 +42,12 @@ class SupertrendHAStrategy(BaseStrategy):
         
         # Calculate HTF EMA
         if self.use_htf_ema:
-            # Resample to HTF (e.g. 15m -> 1H)
-            # Ensure index is datetime for resampling
-            if not isinstance(df.index, pd.DatetimeIndex):
-                df.index = pd.to_datetime(df.index)
-                
-            htf_df = df[['open', 'high', 'low', 'close', 'volume']].resample(
-                self.htf_ema_timeframe, label='right', closed='right'
-            ).agg({
-                'open': 'first',
-                'high': 'max',
-                'low': 'min',
-                'close': 'last',
-                'volume': 'sum'
-            })
-            
-            # Calculate EMA on HTF
-            htf_df = calculate_ema(htf_df, period=self.htf_ema_period, column_name='ema_htf')
-            
-            # STRICT: Shift by 1 to avoid lookahead bias. 
-            # The value at 13:00 must be the EMA calculated from candles closing BEFORE 13:00 (i.e. up to 12:00).
-            htf_df['ema_htf'] = htf_df['ema_htf'].shift(1)
-            
-            # Merge back to 15m and forward-fill
-            df = df.merge(htf_df[['ema_htf']], left_index=True, right_index=True, how='left')
-            df['ema_htf'] = df['ema_htf'].ffill()
+            # logic moved to indicators/htf_ema.py
+            df = calculate_htf_ema(df, self.htf_ema_timeframe, self.htf_ema_period)
+        
+        if self.use_volume_filter:
+            # volume_ma calculation moved to indicators/volume.py
+            df = calculate_volume_ma(df, period=self.volume_ma_period)
         
         # Calculate HA candles
         df = calculate_heikin_ashi(df)
@@ -90,6 +77,15 @@ class SupertrendHAStrategy(BaseStrategy):
             long_condition &= (df['close'] > df['ema_htf'])
             # Entry 15m Short only if 15m Close < 1H EMA 50
             short_condition &= (df['close'] < df['ema_htf'])
+            
+        if self.use_volume_filter:
+            # Volume filter: current volume > average volume * threshold
+            # volume_ma is already shifted by 1
+            volume_condition = (df['volume'] > df['volume_ma'] * self.volume_threshold)
+            
+            # Apply filter only to entries, not exits (optional, but requested logic is for entry)
+            long_condition &= volume_condition
+            short_condition &= volume_condition
             
         # If flipped but entry condition not met, it's a close-only signal
         close_short_only = flip_to_long & ~long_condition
