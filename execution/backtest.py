@@ -26,14 +26,8 @@ class BacktestEngine(ExecutionEngine):
         self.position_size = 0.0
         self.sl_price = 0.0
         self.initial_sl_price = 0.0
-        self.peak_price = 0.0
         self.entry_fee = 0.0
         
-        from config import settings
-        self.use_ts = getattr(settings, 'USE_TRAILING_STOP', False)
-        self.ts_activation_rr = getattr(settings, 'TRAILING_STOP_ACTIVATION_RR', 1.0)
-        self.ts_distance_atr = getattr(settings, 'TRAILING_STOP_DISTANCE_ATR', 1.5)
-
         self.trades = []
         self.equity_curve = []
 
@@ -48,7 +42,6 @@ class BacktestEngine(ExecutionEngine):
             current_atr = row.get("atr", 0.0)
 
             self._process_pending_signal(pending_signal, current_open, index, pending_atr)
-            self._evaluate_trailing_stop(row, current_atr)
             self._evaluate_stop_loss(row, index)
             self._record_equity(row, index)
 
@@ -82,40 +75,16 @@ class BacktestEngine(ExecutionEngine):
             if self.position == 1:
                 self.close_position(current_open, timestamp=index, reason="Close Long (EMA block)")
 
-    def _evaluate_trailing_stop(self, row, current_atr):
-        if self.position == 1:
-            if row["high"] > self.peak_price:
-                self.peak_price = row["high"]
-            if self.use_ts and self.initial_sl_price > 0:
-                activation_pnl_distance = (self.entry_price - self.initial_sl_price) * self.ts_activation_rr
-                if (self.peak_price - self.entry_price) >= activation_pnl_distance:
-                    new_sl = self.peak_price - (current_atr * self.ts_distance_atr)
-                    if new_sl > self.sl_price:
-                        self.sl_price = new_sl
-        elif self.position == -1:
-            if row["low"] < self.peak_price:
-                self.peak_price = row["low"]
-            if self.use_ts and self.initial_sl_price > 0:
-                activation_pnl_distance = (self.initial_sl_price - self.entry_price) * self.ts_activation_rr
-                if (self.entry_price - self.peak_price) >= activation_pnl_distance:
-                    new_sl = self.peak_price + (current_atr * self.ts_distance_atr)
-                    if new_sl < self.sl_price:
-                        self.sl_price = new_sl
+
 
     def _evaluate_stop_loss(self, row, index):
         if self.position == 1 and self.sl_atr_multiplier > 0:
-            if row["low"] <= self.sl_price:
-                reason = "Trailing SL Hit" if self.sl_price > self.initial_sl_price else "SL Hit"
-                # If it gapped completely below SL, execute at open, else execute at SL exact price
-                exit_price = min(row["open"], self.sl_price)
-                self.close_position(exit_price, timestamp=index, reason=reason)
+            if row["close"] <= self.sl_price:
+                self.close_position(row["close"], timestamp=index, reason="SL Hit (Close)")
                 
         elif self.position == -1 and self.sl_atr_multiplier > 0:
-            if row["high"] >= self.sl_price:
-                reason = "Trailing SL Hit" if self.sl_price < self.initial_sl_price else "SL Hit"
-                # If it gapped completely above SL, execute at open, else execute at SL exact price
-                exit_price = max(row["open"], self.sl_price)
-                self.close_position(exit_price, timestamp=index, reason=reason)
+            if row["close"] >= self.sl_price:
+                self.close_position(row["close"], timestamp=index, reason="SL Hit (Close)")
 
     def _record_equity(self, row, index):
         unrealized_pnl = 0
@@ -147,7 +116,6 @@ class BacktestEngine(ExecutionEngine):
         self.entry_fee = fee
         self.sl_price = sl_price
         self.initial_sl_price = sl_price
-        self.peak_price = price
 
         self.trades.append(
             {
@@ -179,7 +147,6 @@ class BacktestEngine(ExecutionEngine):
         self.entry_fee = fee
         self.sl_price = sl_price
         self.initial_sl_price = sl_price
-        self.peak_price = price
 
         self.trades.append(
             {
@@ -223,7 +190,6 @@ class BacktestEngine(ExecutionEngine):
         self.entry_fee = 0.0
         self.sl_price = 0.0
         self.initial_sl_price = 0.0
-        self.peak_price = 0.0
 
     def generate_report(self, silent=False):
         BacktestReporter.generate_report(
