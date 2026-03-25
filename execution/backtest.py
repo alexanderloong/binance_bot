@@ -86,17 +86,24 @@ class BacktestEngine(ExecutionEngine):
                     )
 
             # SL Evaluation for current candle
-            if not entered_this_candle:
-                if self.position == 1 and self.sl_atr_multiplier > 0:
-                    if row["low"] <= self.sl_price:
-                        self.close_position(
-                            self.sl_price, timestamp=index, reason="SL Hit"
-                        )
-                elif self.position == -1 and self.sl_atr_multiplier > 0:
-                    if row["high"] >= self.sl_price:
-                        self.close_position(
-                            self.sl_price, timestamp=index, reason="SL Hit"
-                        )
+            if self.position == 1 and self.sl_atr_multiplier > 0:
+                if row["low"] <= self.sl_price:
+                    # Prevent gap-down cheating: if the candle opened below SL, we get filled at Open
+                    fill_price = self.sl_price
+                    if not entered_this_candle and row["open"] < self.sl_price:
+                        fill_price = row["open"]
+                    self.close_position(
+                        fill_price, timestamp=index, reason="SL Hit"
+                    )
+            elif self.position == -1 and self.sl_atr_multiplier > 0:
+                if row["high"] >= self.sl_price:
+                    # Prevent gap-up cheating: if the candle opened above SL, we get filled at Open
+                    fill_price = self.sl_price
+                    if not entered_this_candle and row["open"] > self.sl_price:
+                        fill_price = row["open"]
+                    self.close_position(
+                        fill_price, timestamp=index, reason="SL Hit"
+                    )
 
             # 2. Record Equity MTM
             unrealized_pnl = 0

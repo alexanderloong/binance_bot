@@ -65,7 +65,7 @@ def run_optimization():
     df = provider.get_historical_data(settings.SYMBOL, settings.TIMEFRAME, limit=70000)
 
     # Quét dải EMA từ 20 đến 500 với bước nhảy 10
-    ema_periods = list(range(50, 200, 1))
+    ema_periods = list(range(50, 201, 1))
     args_list = [(p, df) for p in ema_periods]
     total_iterations = len(args_list)
 
