@@ -20,8 +20,8 @@ ATR_PERIOD = 14
 USE_SL = False
 SL_ATR_MULTIPLIER = 10
 
-USE_EMA = False
-EMA_PERIOD = 200
+USE_EMA = True
+EMA_PERIOD = 50
 
 # Risk Management
 RISK_PER_TRADE_PCNT = 0.01  # 1% risk per trade

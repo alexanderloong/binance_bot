@@ -215,6 +215,16 @@ class BacktestEngine(ExecutionEngine):
         bot_scores = score_bot(returns, trades_pnl, equity_curve_list)
 
         total_pnl = close_trades["pnl"].sum()
+        
+        try:
+            start_time = pd.to_datetime(equity_df["timestamp"].iloc[0])
+            end_time = pd.to_datetime(equity_df["timestamp"].iloc[-1])
+            days = (end_time - start_time).total_seconds() / 86400.0
+            days = max(days, 1)
+        except Exception:
+            days = 1
+            
+        avg_trades_per_day = len(close_trades) / days
 
         if silent:
             return
@@ -245,6 +255,7 @@ class BacktestEngine(ExecutionEngine):
         print(f"  - Avg Win/Loss Ratio: {avg_win_loss_ratio(trades_pnl):.2f}")
         print(f"  - Expectancy:         {expectancy(trades_pnl):.2f} USDT")
         print(f"  - Consecutive Losses: {consecutive_losses(trades_pnl)}")
+        print(f"  - Avg Trades/Day:     {avg_trades_per_day:.2f}")
         print("-----------------------")
         print("[Nhóm 4] Tổng điểm (BOT SCORE):")
         print(f"  - Profitability Score: {bot_scores['profitability_score']}/100")
