@@ -104,13 +104,18 @@ class BacktestEngine(ExecutionEngine):
 
     def _evaluate_stop_loss(self, row, index):
         if self.position == 1 and self.sl_atr_multiplier > 0:
-            if row["close"] <= self.sl_price:
-                reason = "Trailing SL Hit" if self.sl_price > self.initial_sl_price else "SL Hit (Close)"
-                self.close_position(row["close"], timestamp=index, reason=reason)
+            if row["low"] <= self.sl_price:
+                reason = "Trailing SL Hit" if self.sl_price > self.initial_sl_price else "SL Hit"
+                # If it gapped completely below SL, execute at open, else execute at SL exact price
+                exit_price = min(row["open"], self.sl_price)
+                self.close_position(exit_price, timestamp=index, reason=reason)
+                
         elif self.position == -1 and self.sl_atr_multiplier > 0:
-            if row["close"] >= self.sl_price:
-                reason = "Trailing SL Hit" if self.sl_price < self.initial_sl_price else "SL Hit (Close)"
-                self.close_position(row["close"], timestamp=index, reason=reason)
+            if row["high"] >= self.sl_price:
+                reason = "Trailing SL Hit" if self.sl_price < self.initial_sl_price else "SL Hit"
+                # If it gapped completely above SL, execute at open, else execute at SL exact price
+                exit_price = max(row["open"], self.sl_price)
+                self.close_position(exit_price, timestamp=index, reason=reason)
 
     def _record_equity(self, row, index):
         unrealized_pnl = 0
