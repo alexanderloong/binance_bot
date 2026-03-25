@@ -38,7 +38,14 @@ class BacktestEngine(ExecutionEngine):
         self.entry_price = 0.0
         self.position_size = 0.0
         self.sl_price = 0.0
+        self.initial_sl_price = 0.0
+        self.peak_price = 0.0
         self.entry_fee = 0.0
+        
+        from config import settings
+        self.use_ts = getattr(settings, 'USE_TRAILING_STOP', False)
+        self.ts_activation_rr = getattr(settings, 'TRAILING_STOP_ACTIVATION_RR', 1.0)
+        self.ts_distance_atr = getattr(settings, 'TRAILING_STOP_DISTANCE_ATR', 1.5)
 
         self.trades = []
         self.equity_curve = []
@@ -51,6 +58,7 @@ class BacktestEngine(ExecutionEngine):
         pending_atr = 0.0
         for index, row in df.iterrows():
             current_open = row["open"]
+            current_atr = row.get("atr", 0.0)
             entered_this_candle = False
 
             # 1. Execute pending signal from previous candle at current OPEN
@@ -84,17 +92,39 @@ class BacktestEngine(ExecutionEngine):
                     self.close_position(
                         current_open, timestamp=index, reason="Close Long (EMA block)"
                     )
+                    
+            # Trailing Stop dynamic adjustment
+            if self.position == 1:
+                if row["high"] > self.peak_price:
+                    self.peak_price = row["high"]
+                if self.use_ts and self.initial_sl_price > 0:
+                    activation_pnl_distance = (self.entry_price - self.initial_sl_price) * self.ts_activation_rr
+                    if (self.peak_price - self.entry_price) >= activation_pnl_distance:
+                        new_sl = self.peak_price - (current_atr * self.ts_distance_atr)
+                        if new_sl > self.sl_price:
+                            self.sl_price = new_sl
+            elif self.position == -1:
+                if row["low"] < self.peak_price:
+                    self.peak_price = row["low"]
+                if self.use_ts and self.initial_sl_price > 0:
+                    activation_pnl_distance = (self.initial_sl_price - self.entry_price) * self.ts_activation_rr
+                    if (self.entry_price - self.peak_price) >= activation_pnl_distance:
+                        new_sl = self.peak_price + (current_atr * self.ts_distance_atr)
+                        if new_sl < self.sl_price:
+                            self.sl_price = new_sl
 
             # SL Evaluation for current candle (based on CLOSE price)
             if self.position == 1 and self.sl_atr_multiplier > 0:
                 if row["close"] <= self.sl_price:
+                    reason = "Trailing SL Hit" if self.sl_price > self.initial_sl_price else "SL Hit (Close)"
                     self.close_position(
-                        row["close"], timestamp=index, reason="SL Hit (Close)"
+                        row["close"], timestamp=index, reason=reason
                     )
             elif self.position == -1 and self.sl_atr_multiplier > 0:
                 if row["close"] >= self.sl_price:
+                    reason = "Trailing SL Hit" if self.sl_price < self.initial_sl_price else "SL Hit (Close)"
                     self.close_position(
-                        row["close"], timestamp=index, reason="SL Hit (Close)"
+                        row["close"], timestamp=index, reason=reason
                     )
 
             # 2. Record Equity MTM
@@ -140,6 +170,8 @@ class BacktestEngine(ExecutionEngine):
         self.position_size = size
         self.entry_fee = fee
         self.sl_price = sl_price
+        self.initial_sl_price = sl_price
+        self.peak_price = price
 
         self.trades.append(
             {
@@ -170,6 +202,8 @@ class BacktestEngine(ExecutionEngine):
         self.position_size = size
         self.entry_fee = fee
         self.sl_price = sl_price
+        self.initial_sl_price = sl_price
+        self.peak_price = price
 
         self.trades.append(
             {
@@ -211,6 +245,9 @@ class BacktestEngine(ExecutionEngine):
         self.entry_price = 0
         self.position_size = 0
         self.entry_fee = 0.0
+        self.sl_price = 0.0
+        self.initial_sl_price = 0.0
+        self.peak_price = 0.0
 
     def generate_report(self, silent=False):
         trades_df = pd.DataFrame(self.trades)
