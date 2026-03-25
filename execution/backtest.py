@@ -85,24 +85,16 @@ class BacktestEngine(ExecutionEngine):
                         current_open, timestamp=index, reason="Close Long (EMA block)"
                     )
 
-            # SL Evaluation for current candle
+            # SL Evaluation for current candle (based on CLOSE price)
             if self.position == 1 and self.sl_atr_multiplier > 0:
-                if row["low"] <= self.sl_price:
-                    # Prevent gap-down cheating: if the candle opened below SL, we get filled at Open
-                    fill_price = self.sl_price
-                    if not entered_this_candle and row["open"] < self.sl_price:
-                        fill_price = row["open"]
+                if row["close"] <= self.sl_price:
                     self.close_position(
-                        fill_price, timestamp=index, reason="SL Hit"
+                        row["close"], timestamp=index, reason="SL Hit (Close)"
                     )
             elif self.position == -1 and self.sl_atr_multiplier > 0:
-                if row["high"] >= self.sl_price:
-                    # Prevent gap-up cheating: if the candle opened above SL, we get filled at Open
-                    fill_price = self.sl_price
-                    if not entered_this_candle and row["open"] > self.sl_price:
-                        fill_price = row["open"]
+                if row["close"] >= self.sl_price:
                     self.close_position(
-                        fill_price, timestamp=index, reason="SL Hit"
+                        row["close"], timestamp=index, reason="SL Hit (Close)"
                     )
 
             # 2. Record Equity MTM
@@ -132,18 +124,22 @@ class BacktestEngine(ExecutionEngine):
 
     def execute_long(self, price: float, **kwargs):
         timestamp = kwargs.get("timestamp")
-        size = self.risk_manager.calculate_position_size(self.capital, price)
+        current_atr = kwargs.get("current_atr", 0)
+
+        sl_price = 0.0
+        if self.sl_atr_multiplier > 0 and current_atr > 0:
+            sl_price = price - (current_atr * self.sl_atr_multiplier)
+
+        size = self.risk_manager.calculate_position_size(
+            self.capital, price, stop_loss=sl_price if sl_price > 0 else None
+        )
         fee = price * size * self.taker_fee
 
-        current_atr = kwargs.get("current_atr", 0)
         self.position = 1
         self.entry_price = price
         self.position_size = size
         self.entry_fee = fee
-        if self.sl_atr_multiplier > 0 and current_atr > 0:
-            self.sl_price = price - (current_atr * self.sl_atr_multiplier)
-        else:
-            self.sl_price = 0.0
+        self.sl_price = sl_price
 
         self.trades.append(
             {
@@ -158,18 +154,22 @@ class BacktestEngine(ExecutionEngine):
 
     def execute_short(self, price: float, **kwargs):
         timestamp = kwargs.get("timestamp")
-        size = self.risk_manager.calculate_position_size(self.capital, price)
+        current_atr = kwargs.get("current_atr", 0)
+
+        sl_price = 0.0
+        if self.sl_atr_multiplier > 0 and current_atr > 0:
+            sl_price = price + (current_atr * self.sl_atr_multiplier)
+
+        size = self.risk_manager.calculate_position_size(
+            self.capital, price, stop_loss=sl_price if sl_price > 0 else None
+        )
         fee = price * size * self.taker_fee
 
-        current_atr = kwargs.get("current_atr", 0)
         self.position = -1
         self.entry_price = price
         self.position_size = size
         self.entry_fee = fee
-        if self.sl_atr_multiplier > 0 and current_atr > 0:
-            self.sl_price = price + (current_atr * self.sl_atr_multiplier)
-        else:
-            self.sl_price = 0.0
+        self.sl_price = sl_price
 
         self.trades.append(
             {
