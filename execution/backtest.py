@@ -74,6 +74,16 @@ class BacktestEngine(ExecutionEngine):
                         current_open, timestamp=index, current_atr=pending_atr
                     )
                     entered_this_candle = True
+            elif pending_signal == 2:
+                if self.position == -1:
+                    self.close_position(
+                        current_open, timestamp=index, reason="Close Short (EMA block)"
+                    )
+            elif pending_signal == -2:
+                if self.position == 1:
+                    self.close_position(
+                        current_open, timestamp=index, reason="Close Long (EMA block)"
+                    )
 
             # SL Evaluation for current candle
             if not entered_this_candle:

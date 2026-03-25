@@ -33,18 +33,26 @@ class SupertrendHAStrategy(BaseStrategy):
         # Detect flips
         st_shifted = df['supertrend'].shift(1)
         
-        # Long entry: previous was -1 or 0, now 1
-        long_condition = (st_shifted <= 0) & (df['supertrend'] == 1)
+        # Long entry / Short exit: previous was -1 or 0, now 1
+        flip_to_long = (st_shifted <= 0) & (df['supertrend'] == 1)
+        long_condition = flip_to_long
+        close_short_only = pd.Series(False, index=df.index)
         if self.use_ema:
-            long_condition = long_condition & (df['close'] > df['ema'])
+            long_condition = flip_to_long & (df['close'] > df['ema'])
+            close_short_only = flip_to_long & ~(df['close'] > df['ema'])
             
-        # Short entry: previous was 1 or 0, now -1
-        short_condition = (st_shifted >= 0) & (df['supertrend'] == -1)
+        # Short entry / Long exit: previous was 1 or 0, now -1
+        flip_to_short = (st_shifted >= 0) & (df['supertrend'] == -1)
+        short_condition = flip_to_short
+        close_long_only = pd.Series(False, index=df.index)
         if self.use_ema:
-            short_condition = short_condition & (df['close'] < df['ema'])
+            short_condition = flip_to_short & (df['close'] < df['ema'])
+            close_long_only = flip_to_short & ~(df['close'] < df['ema'])
         
         df.loc[long_condition, 'signal'] = 1
         df.loc[short_condition, 'signal'] = -1
+        df.loc[close_short_only, 'signal'] = 2
+        df.loc[close_long_only, 'signal'] = -2
         
         df['trend_state'] = df['supertrend']
         
