@@ -63,7 +63,7 @@ def run_optimization():
     provider = HistoricalDataProvider()
     df = provider.get_historical_data(settings.SYMBOL, settings.TIMEFRAME, limit=70000)
 
-    periods = range(6, 9, 1)
+    periods = range(6, 20, 1)
     multipliers = [m / 10.0 for m in range(10, 30, 1)]
 
     args_list = list(itertools.product(periods, multipliers))
