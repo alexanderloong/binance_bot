@@ -24,9 +24,6 @@ def main():
         'atr_period': [14],
         'use_ema': [True],
         'ema_period': [100, 200, 300],           # Trend bias speeds
-        'use_adx': [True, False],                # Test with and without ADX
-        'adx_period': [14],
-        'adx_threshold': [20, 25],               # Chop index thresholds
         'sl_atr_multiplier': [1.5, 2.0, 3.0]     # Stop Loss distance (wider is often safer)
     }
     
@@ -61,7 +58,7 @@ def main():
             f" ├─> Max Drawdown:  {res['max_drawdown']:.2f}%\n"
             f" ├─> Expectancy:    {res['expectancy']:.2f} USDT\n"
             f" └─> Configuration: ST({p['st_period']}, {p['st_multiplier']}) | "
-            f"EMA({p['ema_period']}) | ADX(Enable:{p['use_adx']}, Thresh:{p['adx_threshold']}) | "
+            f"EMA({p['ema_period']}) | "
             f"SL Multiplier({p['sl_atr_multiplier']}x ATR)"
         )
 

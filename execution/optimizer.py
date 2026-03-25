@@ -24,10 +24,7 @@ def evaluate_params(args: tuple) -> Dict[str, Any]:
         multiplier=params.get('st_multiplier'),
         atr_period=params.get('atr_period'),
         ema_period=params.get('ema_period'),
-        use_ema=params.get('use_ema', True),
-        use_adx=params.get('use_adx', True),
-        adx_period=params.get('adx_period'),
-        adx_threshold=params.get('adx_threshold')
+        use_ema=params.get('use_ema', True)
     )
     
     try:
