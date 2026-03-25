@@ -15,7 +15,8 @@ def run_backtest():
     df_signals = strategy.generate_signals(df)
 
     engine = BacktestEngine(
-        initial_capital=1000.0, sl_atr_multiplier=settings.SL_ATR_MULTIPLIER
+        initial_capital=1000.0, 
+        sl_atr_multiplier=settings.SL_ATR_MULTIPLIER if getattr(settings, 'USE_SL', True) else 0.0
     )
     engine.run(df_signals)
 
