@@ -4,6 +4,7 @@ from indicators.heikin_ashi import calculate_heikin_ashi
 from indicators.supertrend import calculate_supertrend
 from indicators.atr import calculate_atr
 from indicators.ema import calculate_ema
+from indicators.adx import calculate_adx
 from config import settings
 
 class SupertrendHAStrategy(BaseStrategy):
@@ -14,6 +15,9 @@ class SupertrendHAStrategy(BaseStrategy):
         self.atr_period = atr_period if atr_period is not None else settings.ATR_PERIOD
         self.ema_period = ema_period if ema_period is not None else settings.EMA_PERIOD
         self.use_ema = use_ema if use_ema is not None else getattr(settings, 'USE_EMA', True)
+        self.use_adx = getattr(settings, 'USE_ADX', True)
+        self.adx_period = getattr(settings, 'ADX_PERIOD', 14)
+        self.adx_threshold = getattr(settings, 'ADX_THRESHOLD', 20)
 
     def generate_signals(self, df: pd.DataFrame) -> pd.DataFrame:
         # Calculate ATR
@@ -21,6 +25,9 @@ class SupertrendHAStrategy(BaseStrategy):
         
         # Calculate EMA
         df = calculate_ema(df, period=self.ema_period)
+        
+        # Calculate ADX
+        df = calculate_adx(df, period=self.adx_period)
         
         # Calculate HA candles
         df = calculate_heikin_ashi(df)
@@ -33,21 +40,25 @@ class SupertrendHAStrategy(BaseStrategy):
         # Detect flips
         st_shifted = df['supertrend'].shift(1)
         
-        # Long entry / Short exit: previous was -1 or 0, now 1
+        # Base flips
         flip_to_long = (st_shifted <= 0) & (df['supertrend'] == 1)
-        long_condition = flip_to_long
-        close_short_only = pd.Series(False, index=df.index)
-        if self.use_ema:
-            long_condition = flip_to_long & (df['close'] > df['ema'])
-            close_short_only = flip_to_long & ~(df['close'] > df['ema'])
-            
-        # Short entry / Long exit: previous was 1 or 0, now -1
         flip_to_short = (st_shifted >= 0) & (df['supertrend'] == -1)
-        short_condition = flip_to_short
-        close_long_only = pd.Series(False, index=df.index)
+        
+        # Cumulative conditions for entry
+        long_condition = flip_to_long.copy()
+        short_condition = flip_to_short.copy()
+        
         if self.use_ema:
-            short_condition = flip_to_short & (df['close'] < df['ema'])
-            close_long_only = flip_to_short & ~(df['close'] < df['ema'])
+            long_condition &= (df['close'] > df['ema'])
+            short_condition &= (df['close'] < df['ema'])
+            
+        if self.use_adx:
+            long_condition &= (df['adx'] > self.adx_threshold)
+            short_condition &= (df['adx'] > self.adx_threshold)
+            
+        # If flipped but entry condition not met, it's a close-only signal
+        close_short_only = flip_to_long & ~long_condition
+        close_long_only = flip_to_short & ~short_condition
         
         df.loc[long_condition, 'signal'] = 1
         df.loc[short_condition, 'signal'] = -1
