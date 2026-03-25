@@ -108,7 +108,7 @@ def run_optimization():
                 best_score = total_score
                 best_params = (p, m, atr_m)
                 print(
-                    f"\n>>> NEW BEST FOUND -> Period: {p}, Multiplier: {m}, SL ATR: {atr_m} | Score: {total_score}/100 | PnL: {total_pnl:.2f} USDT"
+                    f"\n>>> NEW BEST FOUND -> Period: {p}, Multiplier: {m}, SL ATR: {atr_m} | Score: {total_score:.4f}/100 | PnL: {total_pnl:.2f} USDT"
                 )
 
     print("\n" + "=" * 40)
@@ -118,7 +118,7 @@ def run_optimization():
         print(f"Best Period:                           {best_params[0]}")
         print(f"Best Multiplier:                       {best_params[1]}")
         print(f"Best SL ATR Multiplier:                {best_params[2]}")
-        print(f"Best Total Score:                      {best_score}/100")
+        print(f"Best Total Score:                      {best_score:.4f}/100")
         best_result = next(
             (
                 r

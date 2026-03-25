@@ -166,37 +166,37 @@ def score_bot(returns, trades_pnl, equity_curve):
     
     # 1. Điểm Lợi nhuận (Tối đa 100)
     # Sharpe = 2.0 -> 50 điểm, Profit Factor = 2.5 -> 50 điểm
-    score_profit = 0
+    score_profit = 0.0
     if sr > 0:
         score_profit += min((sr / 2.0) * 50, 50)
     if pf != float('inf') and pf > 1.0:
         score_profit += min(((pf - 1.0) / 1.5) * 50, 50)
     elif pf == float('inf'):
         score_profit += 50
-    score_profit = max(0, min(100, int(score_profit)))
+    score_profit = max(0.0, min(100.0, score_profit))
 
     # 2. Điểm Rủi ro (Tối đa 100) 
     # MD < 5% -> 100, MD > 30% -> 0
     if md <= 0.05:
-        score_risk = 100
+        score_risk = 100.0
     elif md >= 0.30:
-        score_risk = 0
+        score_risk = 0.0
     else:
-        score_risk = int(100 - ((md - 0.05) / 0.25) * 100)
-    score_risk = max(0, min(100, score_risk))
+        score_risk = 100.0 - ((md - 0.05) / 0.25) * 100.0
+    score_risk = max(0.0, min(100.0, score_risk))
     
     # 3. Điểm Chất lượng lệnh (Tối đa 100)
     # Win rate 60% -> 50 điểm, RL 2.0 -> 50 điểm
-    score_tq = 0
+    score_tq = 0.0
     score_tq += min((wr / 0.6) * 50, 50)
     if awlr != float('inf') and awlr > 0:
         score_tq += min((awlr / 2.0) * 50, 50)
     elif awlr == float('inf'):
         score_tq += 50
-    score_tq = max(0, min(100, int(score_tq)))
+    score_tq = max(0.0, min(100.0, score_tq))
     
     # 4. Tổng điểm (Trọng số: Lợi nhuận 40%, Rủi ro 40%, CL Lệnh 20%)
-    total_score = int(0.4 * score_profit + 0.4 * score_risk + 0.2 * score_tq)
+    total_score = 0.4 * score_profit + 0.4 * score_risk + 0.2 * score_tq
     
     return {
         "profitability_score": score_profit,

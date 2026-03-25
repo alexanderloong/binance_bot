@@ -100,7 +100,7 @@ def run_optimization():
                 best_score = total_score
                 best_params = ema_p
                 print(
-                    f"\n>>> NEW BEST FOUND -> EMA Period: {ema_p} | Score: {total_score}/100 | PnL: {total_pnl:.2f} USDT"
+                    f"\n>>> NEW BEST FOUND -> EMA Period: {ema_p} | Score: {total_score:.4f}/100 | PnL: {total_pnl:.2f} USDT"
                 )
 
     print("\n" + "=" * 40)
@@ -108,7 +108,7 @@ def run_optimization():
     print("=" * 40)
     if best_params:
         print(f"Best EMA Period:                       {best_params}")
-        print(f"Best Total Score:                      {best_score}/100")
+        print(f"Best Total Score:                      {best_score:.4f}/100")
         best_result = next((r for r in results if r["ema_period"] == best_params), None)
         if best_result:
             print(f"Total PnL of best config:              {best_result['pnl']:.2f} USDT")
